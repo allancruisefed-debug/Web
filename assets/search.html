@@ -1,470 +1,740 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <title>Web Search</title>
+<title>Web Search</title>
 
-  <style>
+<style>
     * {
-      box-sizing: border-box;
+        box-sizing: border-box;
     }
 
     body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont,
-                   "Segoe UI", sans-serif;
-      background: #0b0b0f;
-      color: #f5f5f7;
+        margin: 0;
+        padding: 16px;
+        background: #111;
+        color: #eee;
+        font-family: Arial, sans-serif;
     }
 
-    .app {
-      max-width: 760px;
-      margin: auto;
-      padding: 18px;
+    h2 {
+        margin-top: 0;
+        margin-bottom: 12px;
     }
 
-    h1 {
-      margin: 0 0 16px;
-      font-size: 24px;
-    }
-
-    .search {
-      display: flex;
-      gap: 8px;
+    .search-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
     }
 
     input {
-      flex: 1;
-      padding: 13px;
-      border-radius: 12px;
-      border: 1px solid #333;
-      background: #17171d;
-      color: white;
-      outline: none;
-      font-size: 16px;
+        flex: 1;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #444;
+        background: #222;
+        color: white;
+        outline: none;
     }
 
     button {
-      border: 0;
-      border-radius: 10px;
-      padding: 10px 14px;
-      background: #25252d;
-      color: white;
-      cursor: pointer;
+        padding: 9px 12px;
+        border: none;
+        border-radius: 7px;
+        background: #333;
+        color: white;
+        cursor: pointer;
     }
 
-    .search button {
-      background: #ffffff;
-      color: #000000;
-      font-weight: 600;
+    button:hover {
+        background: #444;
+    }
+
+    .primary {
+        background: #555;
     }
 
     .status {
-      margin: 16px 0;
-      color: #999;
-      font-size: 14px;
+        font-size: 13px;
+        color: #aaa;
+        margin: 8px 0 12px;
     }
 
     .result {
-      background: #15151b;
-      border: 1px solid #292930;
-      border-radius: 14px;
-      padding: 15px;
-      margin-bottom: 12px;
+        background: #1b1b1b;
+        border: 1px solid #333;
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 10px;
     }
 
-    .title {
-      font-size: 17px;
-      font-weight: 600;
-      margin-bottom: 7px;
+    .result-title {
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 6px;
     }
 
-    .url {
-      color: #7ab7ff;
-      font-size: 12px;
-      word-break: break-all;
-      margin-bottom: 9px;
+    .result-url {
+        font-size: 12px;
+        color: #7ab7ff;
+        word-break: break-all;
+        margin-bottom: 8px;
     }
 
-    .description {
-      color: #c8c8ce;
-      font-size: 14px;
-      line-height: 1.45;
+    .result-description {
+        font-size: 14px;
+        color: #ccc;
+        line-height: 1.45;
+        margin-bottom: 10px;
     }
 
     .actions {
-      display: flex;
-      gap: 7px;
-      margin-top: 13px;
-      flex-wrap: wrap;
-    }
-
-    .actions button {
-      font-size: 13px;
-    }
-
-    .empty {
-      text-align: center;
-      color: #888;
-      padding: 40px 10px;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
     }
 
     .pagination {
-      display: flex;
-      justify-content: center;
-      gap: 8px;
-      margin: 20px 0;
+        display: flex;
+        justify-content: space-between;
+        margin-top: 14px;
     }
-  </style>
+
+    .hidden {
+        display: none;
+    }
+
+    /* Detailed view */
+
+    #detailView {
+        background: #181818;
+        border: 1px solid #333;
+        border-radius: 10px;
+        padding: 14px;
+        margin-top: 12px;
+    }
+
+    #detailTitle {
+        font-size: 19px;
+        font-weight: bold;
+        margin-bottom: 8px;
+    }
+
+    #detailUrl {
+        color: #7ab7ff;
+        font-size: 12px;
+        word-break: break-all;
+        margin-bottom: 12px;
+    }
+
+    #detailDescription {
+        color: #ccc;
+        line-height: 1.5;
+        margin-bottom: 14px;
+    }
+
+    #researchContent {
+        white-space: pre-wrap;
+        color: #ddd;
+        line-height: 1.55;
+        font-size: 14px;
+        max-height: 500px;
+        overflow-y: auto;
+        border-top: 1px solid #333;
+        padding-top: 12px;
+        margin-top: 12px;
+    }
+
+    .detail-actions {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+    }
+
+    .loading {
+        color: #aaa;
+        font-style: italic;
+    }
+</style>
 </head>
 
 <body>
 
-<div class="app">
+<h2>🌐 Web Search</h2>
 
-  <h1>🔎 Web Search</h1>
-
-  <div class="search">
+<div class="search-row">
     <input
-      id="query"
-      type="text"
-      placeholder="Search the web..."
-      autocomplete="off"
+        id="searchInput"
+        type="text"
+        placeholder="Search the web..."
     >
-
-    <button onclick="search()">
-      Search
+    <button class="primary" onclick="performSearch()">
+        Search
     </button>
-  </div>
+</div>
 
-  <div id="status" class="status">
-    Ready
-  </div>
+<div id="status" class="status">
+    Enter a search query.
+</div>
 
-  <div id="results"></div>
+<div id="results"></div>
 
-  <div id="pagination"
-       class="pagination"></div>
+<div id="pagination" class="pagination hidden">
+    <button id="previousButton" onclick="previousPage()">
+        ← Previous
+    </button>
+
+    <button id="nextButton" onclick="nextPage()">
+        Next →
+    </button>
+</div>
+
+<div id="detailView" class="hidden">
+
+    <div id="detailTitle"></div>
+
+    <div id="detailUrl"></div>
+
+    <div id="detailDescription"></div>
+
+    <div class="detail-actions">
+
+        <button onclick="openOriginal()">
+            Open Original
+        </button>
+
+        <button onclick="copySelectedUrl()">
+            Copy URL
+        </button>
+
+        <button class="primary" onclick="researchSelected()">
+            🔎 Research
+        </button>
+
+        <button onclick="closeDetail()">
+            Close
+        </button>
+
+    </div>
+
+    <div id="researchContent"></div>
 
 </div>
 
-
 <script>
 
-const ENDPOINT =
-  "https://web.allancruise-fed.workers.dev/";
+const SEARCH_ENDPOINT =
+    "https://web.allancruise-fed.workers.dev/";
 
 let currentQuery = "";
 let currentPage = 1;
+let totalPages = 1;
+
+let selectedResult = null;
 
 
-// ========================================
+// --------------------------------------------------
 // SEARCH
-// ========================================
+// --------------------------------------------------
 
-async function search(page = 1) {
+async function performSearch() {
 
-  const input =
-    document.getElementById("query");
+    const input =
+        document.getElementById("searchInput");
 
-  const query =
-    input.value.trim();
+    const query =
+        input.value.trim();
 
-  if (!query) return;
-
-  currentQuery = query;
-  currentPage = page;
-
-  setStatus("Searching...");
-
-  document.getElementById("results").innerHTML = "";
-  document.getElementById("pagination").innerHTML = "";
-
-  try {
-
-    const response =
-      await fetch(
-        ENDPOINT +
-        "?q=" +
-        encodeURIComponent(query) +
-        "&page=" +
-        page
-      );
-
-    if (!response.ok) {
-      throw new Error(
-        "HTTP " + response.status
-      );
+    if (!query) {
+        setStatus("Enter a search query.");
+        return;
     }
 
-    const data =
-      await response.json();
+    currentQuery = query;
+    currentPage = 1;
 
-    displayResults(data);
+    await loadSearch();
+}
 
-  } catch (error) {
+
+// --------------------------------------------------
+// LOAD SEARCH PAGE
+// --------------------------------------------------
+
+async function loadSearch() {
 
     setStatus(
-      "Search failed: " +
-      error.message
+        "Searching..."
     );
 
-  }
+    closeDetail();
+
+    const resultsContainer =
+        document.getElementById("results");
+
+    resultsContainer.innerHTML = "";
+
+    try {
+
+        const url =
+            SEARCH_ENDPOINT +
+            "?q=" +
+            encodeURIComponent(currentQuery) +
+            "&page=" +
+            currentPage;
+
+        const response =
+            await fetch(url);
+
+        if (!response.ok) {
+            throw new Error(
+                "Search failed: HTTP " +
+                response.status
+            );
+        }
+
+        const data =
+            await response.json();
+
+        renderResults(data);
+
+    } catch (error) {
+
+        setStatus(
+            "Search error: " +
+            error.message
+        );
+    }
 }
 
 
-// ========================================
-// DISPLAY RESULTS
-// ========================================
+// --------------------------------------------------
+// RENDER RESULTS
+// --------------------------------------------------
 
-function displayResults(data) {
+function renderResults(data) {
 
-  const container =
-    document.getElementById("results");
+    const resultsContainer =
+        document.getElementById("results");
 
-  const results =
-    data.results || [];
+    resultsContainer.innerHTML = "";
 
-  if (!results.length) {
+    const results =
+        data.results || [];
 
-    container.innerHTML =
-      `<div class="empty">
-        No results found.
-       </div>`;
+    totalPages =
+        data.totalPages || 1;
 
-    setStatus("No results");
+    if (results.length === 0) {
 
-    return;
-  }
-
-  setStatus(
-    `${data.total || results.length} results`
-  );
-
-  container.innerHTML =
-    results.map((item) => {
-
-      const title =
-        escapeHTML(
-          item.title || "Untitled"
+        setStatus(
+            "No results found."
         );
 
-      const description =
-        escapeHTML(
-          item.description || ""
-        );
+        updatePagination();
 
-      const url =
-        escapeHTML(
-          item.url || ""
-        );
-
-      return `
-        <div class="result">
-
-          <div class="title">
-            ${title}
-          </div>
-
-          <div class="url">
-            ${url}
-          </div>
-
-          <div class="description">
-            ${description}
-          </div>
-
-          <div class="actions">
-
-            <button
-              onclick="openUrl('${escapeJS(item.url)}')">
-              Open
-            </button>
-
-            <button
-              onclick="copyUrl('${escapeJS(item.url)}')">
-              Copy URL
-            </button>
-
-            <button
-              onclick="research('${escapeJS(item.url)}')">
-              Research
-            </button>
-
-          </div>
-
-        </div>
-      `;
-
-    }).join("");
-
-  renderPagination(data);
-}
-
-
-// ========================================
-// RESEARCH
-// ========================================
-
-async function research(url) {
-
-  setStatus("Researching source...");
-
-  try {
-
-    const response =
-      await fetch(
-        ENDPOINT +
-        "?url=" +
-        encodeURIComponent(url)
-      );
-
-    if (!response.ok) {
-      throw new Error(
-        "HTTP " + response.status
-      );
+        return;
     }
 
-    const data =
-      await response.json();
-
-    const content =
-      data.content ||
-      data.text ||
-      data.summary ||
-      "No readable content returned.";
-
-    alert(content);
-
-    setStatus("Research complete");
-
-  } catch (error) {
-
     setStatus(
-      "Research failed: " +
-      error.message
+        `Results for "${data.query}" • Page ${currentPage}`
     );
 
-  }
+    results.forEach((result) => {
+
+        const card =
+            document.createElement("div");
+
+        card.className =
+            "result";
+
+        card.innerHTML = `
+            <div class="result-title">
+                ${escapeHtml(result.title || "Untitled")}
+            </div>
+
+            <div class="result-url">
+                ${escapeHtml(result.url || "")}
+            </div>
+
+            <div class="result-description">
+                ${escapeHtml(
+                    result.description ||
+                    "No description available."
+                )}
+            </div>
+
+            <div class="actions">
+
+                <button>
+                    Open
+                </button>
+
+                <button>
+                    Copy URL
+                </button>
+
+                <button class="primary">
+                    🔎 Research
+                </button>
+
+            </div>
+        `;
+
+        const buttons =
+            card.querySelectorAll("button");
+
+        // Open
+        buttons[0].onclick =
+            () => openDetail(result);
+
+        // Copy
+        buttons[1].onclick =
+            () => copyUrl(result.url);
+
+        // Research
+        buttons[2].onclick =
+            () => researchResult(result);
+
+        resultsContainer.appendChild(card);
+    });
+
+    updatePagination();
 }
 
 
-// ========================================
-// OPEN
-// ========================================
+// --------------------------------------------------
+// OPEN DETAILED RESULT
+// --------------------------------------------------
 
-function openUrl(url) {
+function openDetail(result) {
 
-  window.open(
-    url,
-    "_blank"
-  );
+    selectedResult =
+        result;
+
+    document.getElementById(
+        "detailTitle"
+    ).textContent =
+        result.title || "Untitled";
+
+    document.getElementById(
+        "detailUrl"
+    ).textContent =
+        result.url || "";
+
+    document.getElementById(
+        "detailDescription"
+    ).textContent =
+        result.description ||
+        "No description available.";
+
+    document.getElementById(
+        "researchContent"
+    ).textContent = "";
+
+    document.getElementById(
+        "detailView"
+    ).classList.remove("hidden");
+
+    window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: "smooth"
+    });
 }
 
 
-// ========================================
-// COPY
-// ========================================
+// --------------------------------------------------
+// RESEARCH RESULT
+// --------------------------------------------------
+
+async function researchResult(result) {
+
+    openDetail(result);
+
+    const researchArea =
+        document.getElementById(
+            "researchContent"
+        );
+
+    researchArea.innerHTML =
+        '<div class="loading">🔎 Retrieving page content...</div>';
+
+    try {
+
+        const url =
+            SEARCH_ENDPOINT +
+            "?url=" +
+            encodeURIComponent(result.url);
+
+        const response =
+            await fetch(url);
+
+        if (!response.ok) {
+            throw new Error(
+                "Research failed: HTTP " +
+                response.status
+            );
+        }
+
+        const data =
+            await response.json();
+
+        displayResearch(data);
+
+    } catch (error) {
+
+        researchArea.textContent =
+            "Research error: " +
+            error.message;
+    }
+}
+
+
+// --------------------------------------------------
+// RESEARCH FROM DETAIL VIEW
+// --------------------------------------------------
+
+async function researchSelected() {
+
+    if (!selectedResult) {
+        return;
+    }
+
+    await researchResult(
+        selectedResult
+    );
+}
+
+
+// --------------------------------------------------
+// DISPLAY RESEARCH
+// --------------------------------------------------
+
+function displayResearch(data) {
+
+    const researchArea =
+        document.getElementById(
+            "researchContent"
+        );
+
+    let content = "";
+
+    if (data.summary) {
+
+        content +=
+            "SUMMARY\n\n" +
+            data.summary +
+            "\n\n";
+    }
+
+    if (data.content) {
+
+        content +=
+            "SOURCE CONTENT\n\n" +
+            data.content;
+    }
+
+    if (!content) {
+
+        content =
+            data.text ||
+            "No readable content was returned.";
+    }
+
+    researchArea.textContent =
+        content;
+}
+
+
+// --------------------------------------------------
+// OPEN ORIGINAL
+// --------------------------------------------------
+
+function openOriginal() {
+
+    if (!selectedResult) {
+        return;
+    }
+
+    window.open(
+        selectedResult.url,
+        "_blank"
+    );
+}
+
+
+// --------------------------------------------------
+// COPY URL
+// --------------------------------------------------
+
+async function copySelectedUrl() {
+
+    if (!selectedResult) {
+        return;
+    }
+
+    await copyUrl(
+        selectedResult.url
+    );
+}
+
 
 async function copyUrl(url) {
 
-  try {
+    try {
 
-    await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(
+            url
+        );
 
-    setStatus("URL copied");
+        setStatus(
+            "URL copied."
+        );
 
-  } catch {
+    } catch {
 
-    setStatus("Unable to copy URL");
-
-  }
+        setStatus(
+            "Could not copy URL."
+        );
+    }
 }
 
 
-// ========================================
-// PAGINATION
-// ========================================
+// --------------------------------------------------
+// CLOSE DETAIL
+// --------------------------------------------------
 
-function renderPagination(data) {
+function closeDetail() {
 
-  const container =
     document.getElementById(
-      "pagination"
+        "detailView"
+    ).classList.add("hidden");
+
+    selectedResult =
+        null;
+}
+
+
+// --------------------------------------------------
+// PAGINATION
+// --------------------------------------------------
+
+function nextPage() {
+
+    if (
+        currentPage >= totalPages
+    ) {
+        return;
+    }
+
+    currentPage++;
+
+    loadSearch();
+}
+
+
+function previousPage() {
+
+    if (currentPage <= 1) {
+        return;
+    }
+
+    currentPage--;
+
+    loadSearch();
+}
+
+
+function updatePagination() {
+
+    const pagination =
+        document.getElementById(
+            "pagination"
+        );
+
+    const previous =
+        document.getElementById(
+            "previousButton"
+        );
+
+    const next =
+        document.getElementById(
+            "nextButton"
+        );
+
+    if (
+        !currentQuery ||
+        totalPages <= 1
+    ) {
+
+        pagination.classList.add(
+            "hidden"
+        );
+
+        return;
+    }
+
+    pagination.classList.remove(
+        "hidden"
     );
 
-  if (currentPage > 1) {
+    previous.disabled =
+        currentPage <= 1;
 
-    container.innerHTML += `
-      <button
-        onclick="search(${currentPage - 1})">
-        ← Previous
-      </button>
-    `;
-  }
-
-  if (data.hasNext) {
-
-    container.innerHTML += `
-      <button
-        onclick="search(${currentPage + 1})">
-        Next →
-      </button>
-    `;
-  }
+    next.disabled =
+        currentPage >= totalPages;
 }
 
 
-// ========================================
-// HELPERS
-// ========================================
+// --------------------------------------------------
+// STATUS
+// --------------------------------------------------
 
-function setStatus(text) {
+function setStatus(message) {
 
-  document.getElementById(
-    "status"
-  ).textContent = text;
+    document.getElementById(
+        "status"
+    ).textContent =
+        message;
 }
 
 
-function escapeHTML(value) {
+// --------------------------------------------------
+// BASIC HTML ESCAPING
+// --------------------------------------------------
 
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function escapeHtml(value) {
+
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
 }
 
 
-function escapeJS(value) {
-
-  return String(value)
-    .replaceAll("\\", "\\\\")
-    .replaceAll("'", "\\'");
-}
-
-
-// ========================================
-// ENTER KEY
-// ========================================
+// --------------------------------------------------
+// ENTER KEY SEARCH
+// --------------------------------------------------
 
 document
-  .getElementById("query")
-  .addEventListener(
-    "keydown",
-    event => {
+    .getElementById("searchInput")
+    .addEventListener(
+        "keydown",
+        function(event) {
 
-      if (event.key === "Enter") {
-        search();
-      }
+            if (
+                event.key === "Enter"
+            ) {
+                performSearch();
+            }
 
-    }
-  );
+        }
+    );
 
 </script>
 
