@@ -363,3 +363,31 @@ window.ai_edge_gallery_get_result =
 
     }
   };
+// FLOW CONNECTIONS
+
+window.webSearch = searchWeb;
+
+window.webResearch = async function(url) {
+    const response = await fetch(
+        SEARCH_ENDPOINT +
+        "?url=" +
+        encodeURIComponent(url)
+    );
+
+    if (!response.ok) {
+        throw new Error(
+            "Research failed: HTTP " + response.status
+        );
+    }
+
+    return await response.json();
+};
+
+window.webMemorySave = async function(content) {
+    remember(content);
+
+    return {
+        success: true,
+        message: "Saved to Web memory."
+    };
+};
