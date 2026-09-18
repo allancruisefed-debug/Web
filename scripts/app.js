@@ -1,16 +1,18 @@
 const SEARCH_ENDPOINT =
   "https://web.allancruise-fed.workers.dev/";
 
+const MEMORY_KEY = "web_skill_memory_v1";
+
 
 // ======================================================
 // MEMORY
 // ======================================================
 
-const MEMORY_KEY = "web_skill_memory_v1";
-
 function loadMemory() {
   try {
-    return JSON.parse(localStorage.getItem(MEMORY_KEY) || "[]");
+    return JSON.parse(
+      localStorage.getItem(MEMORY_KEY) || "[]"
+    );
   } catch {
     return [];
   }
@@ -23,35 +25,6 @@ function saveMemoryStore(memory) {
   );
 }
 
-
-// ======================================================
-// SEARCH
-// ======================================================
-
-async function searchWeb(query, research = false) {
-  const url =
-    SEARCH_ENDPOINT +
-    "?q=" +
-    encodeURIComponent(query) +
-    (research ? "&research=1" : "");
-
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error(
-      "Search service returned HTTP " +
-      response.status
-    );
-  }
-
-  return await response.json();
-}
-
-
-// ======================================================
-// MEMORY ACTIONS
-// ======================================================
-
 function remember(text, category = "general") {
   const memory = loadMemory();
 
@@ -63,7 +36,6 @@ function remember(text, category = "general") {
   };
 
   memory.push(item);
-
   saveMemoryStore(memory);
 
   return {
@@ -73,29 +45,23 @@ function remember(text, category = "general") {
   };
 }
 
-
 function getMemories(category = null) {
   const memory = loadMemory();
 
-  if (!category) {
-    return memory;
-  }
-
-  return memory.filter(
-    item => item.category === category
-  );
+  return category
+    ? memory.filter(
+        item => item.category === category
+      )
+    : memory;
 }
 
-
 function searchMemory(query) {
-  const memory = loadMemory();
-
   const words = String(query)
     .toLowerCase()
     .split(/\s+/)
     .filter(Boolean);
 
-  return memory.filter(item => {
+  return loadMemory().filter(item => {
     const text = item.text.toLowerCase();
 
     return words.some(word =>
@@ -103,7 +69,6 @@ function searchMemory(query) {
     );
   });
 }
-
 
 function deleteMemory(id) {
   const memory = loadMemory();
@@ -120,7 +85,6 @@ function deleteMemory(id) {
   };
 }
 
-
 function wipeMemory() {
   localStorage.removeItem(MEMORY_KEY);
 
@@ -132,7 +96,33 @@ function wipeMemory() {
 
 
 // ======================================================
-// AI EDGE GALLERY BRIDGE
+// SEARCH
+// ======================================================
+
+async function searchWeb(query, research = false) {
+
+  const endpoint =
+    SEARCH_ENDPOINT +
+    "?q=" +
+    encodeURIComponent(query) +
+    (research ? "&research=1" : "");
+
+  const response =
+    await fetch(endpoint);
+
+  if (!response.ok) {
+    throw new Error(
+      "Search service returned HTTP " +
+      response.status
+    );
+  }
+
+  return await response.json();
+}
+
+
+// ======================================================
+// EDGE GALLERY BRIDGE
 // ======================================================
 
 window.ai_edge_gallery_get_result =
@@ -145,33 +135,54 @@ window.ai_edge_gallery_get_result =
           ? JSON.parse(data)
           : data;
 
-
-      // --------------------------------------------------
-      // Determine action
-      // --------------------------------------------------
-
       const action =
-        String(input?.action || "search")
-          .toLowerCase();
+        String(
+          input?.action || "search"
+        ).toLowerCase();
 
 
-      // --------------------------------------------------
+      // ==================================================
+      // OPEN SEARCH UI
+      // ==================================================
+
+      if (action === "open_ui") {
+
+        return JSON.stringify({
+          result: {
+            success: true
+          },
+
+          webview: {
+            url: "../assets/search.html",
+            aspectRatio: 0.75
+          }
+        });
+      }
+
+
+      // ==================================================
       // SEARCH
-      // --------------------------------------------------
+      // ==================================================
 
       if (action === "search") {
 
         const query =
-          String(input?.query || "").trim();
+          String(
+            input?.query || ""
+          ).trim();
 
         if (!query) {
           return JSON.stringify({
-            error: "A search query is required."
+            error:
+              "A search query is required."
           });
         }
 
         const results =
-          await searchWeb(query, false);
+          await searchWeb(
+            query,
+            false
+          );
 
         return JSON.stringify({
           result: {
@@ -183,23 +194,29 @@ window.ai_edge_gallery_get_result =
       }
 
 
-      // --------------------------------------------------
+      // ==================================================
       // RESEARCH
-      // --------------------------------------------------
+      // ==================================================
 
       if (action === "research") {
 
         const query =
-          String(input?.query || "").trim();
+          String(
+            input?.query || ""
+          ).trim();
 
         if (!query) {
           return JSON.stringify({
-            error: "A research question is required."
+            error:
+              "A research question is required."
           });
         }
 
         const results =
-          await searchWeb(query, true);
+          await searchWeb(
+            query,
+            true
+          );
 
         return JSON.stringify({
           result: {
@@ -211,14 +228,16 @@ window.ai_edge_gallery_get_result =
       }
 
 
-      // --------------------------------------------------
-      // SAVE MEMORY
-      // --------------------------------------------------
+      // ==================================================
+      // MEMORY SAVE
+      // ==================================================
 
       if (action === "memory_save") {
 
         const text =
-          String(input?.text || "").trim();
+          String(
+            input?.text || ""
+          ).trim();
 
         const category =
           String(
@@ -227,49 +246,53 @@ window.ai_edge_gallery_get_result =
 
         if (!text) {
           return JSON.stringify({
-            error: "Memory text is required."
+            error:
+              "Memory text is required."
           });
         }
 
         return JSON.stringify({
-          result: remember(
-            text,
-            category
-          )
+          result:
+            remember(
+              text,
+              category
+            )
         });
       }
 
 
-      // --------------------------------------------------
-      // GET MEMORY
-      // --------------------------------------------------
+      // ==================================================
+      // MEMORY GET
+      // ==================================================
 
       if (action === "memory_get") {
-
-        const category =
-          input?.category || null;
 
         return JSON.stringify({
           result: {
             memories:
-              getMemories(category)
+              getMemories(
+                input?.category || null
+              )
           }
         });
       }
 
 
-      // --------------------------------------------------
-      // SEARCH MEMORY
-      // --------------------------------------------------
+      // ==================================================
+      // MEMORY SEARCH
+      // ==================================================
 
       if (action === "memory_search") {
 
         const query =
-          String(input?.query || "").trim();
+          String(
+            input?.query || ""
+          ).trim();
 
         if (!query) {
           return JSON.stringify({
-            error: "Memory search query is required."
+            error:
+              "Memory search query is required."
           });
         }
 
@@ -282,18 +305,21 @@ window.ai_edge_gallery_get_result =
       }
 
 
-      // --------------------------------------------------
-      // DELETE MEMORY
-      // --------------------------------------------------
+      // ==================================================
+      // MEMORY DELETE
+      // ==================================================
 
       if (action === "memory_delete") {
 
         const id =
-          String(input?.id || "").trim();
+          String(
+            input?.id || ""
+          ).trim();
 
         if (!id) {
           return JSON.stringify({
-            error: "Memory ID is required."
+            error:
+              "Memory ID is required."
           });
         }
 
@@ -304,9 +330,9 @@ window.ai_edge_gallery_get_result =
       }
 
 
-      // --------------------------------------------------
-      // WIPE MEMORY
-      // --------------------------------------------------
+      // ==================================================
+      // MEMORY WIPE
+      // ==================================================
 
       if (action === "memory_wipe") {
 
@@ -317,15 +343,15 @@ window.ai_edge_gallery_get_result =
       }
 
 
-      // --------------------------------------------------
+      // ==================================================
       // UNKNOWN ACTION
-      // --------------------------------------------------
+      // ==================================================
 
       return JSON.stringify({
         error:
-          "Unknown action: " + action
+          "Unknown action: " +
+          action
       });
-
 
     } catch (error) {
 
