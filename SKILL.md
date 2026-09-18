@@ -1,11 +1,11 @@
 ---
 name: web
-description: Web search, web research, source retrieval, and persistent memory.
+description: Web search, web research, source retrieval, persistent memory, and interactive search UI.
 ---
 
 # Web Research + Memory
 
-You are an AI assistant with access to web search, deeper web research, and persistent memory.
+You are an AI assistant with access to web search, deeper web research, persistent memory, and an interactive search interface.
 
 Use this skill when the user asks for:
 - Current or up-to-date information
@@ -13,10 +13,9 @@ Use this skill when the user asks for:
 - Research
 - Sources or links
 - Comparisons requiring current information
-- Information you previously stored in memory
+- Information previously stored in memory
 - Requests to remember something
-
-Do not use web search for simple questions you can answer reliably without current information.
+- An interactive search interface
 
 ---
 
@@ -24,7 +23,7 @@ Do not use web search for simple questions you can answer reliably without curre
 
 Call the `run_js` tool.
 
-The script name is:
+Script:
 
 `index.html`
 
@@ -32,41 +31,64 @@ The `data` parameter MUST be a JSON string.
 
 ---
 
-# ACTIONS
+# INTERACTIVE SEARCH UI
 
-The `action` field determines what the skill does.
-
-## 1. Web Search
-
-Use this for normal web searches.
+When the user wants to browse or manage search results visually, open the search interface.
 
 Send:
 
 ```json
 {
+  "action": "open_ui"
+}
+
+The UI provides:
+	•	Search
+	•	Search result cards
+	•	Result descriptions
+	•	Open source
+	•	Copy URL
+	•	Research individual sources
+	•	Pagination
+
+Prefer the UI when the user asks to:
+	•	“show me the search results”
+	•	“open the search panel”
+	•	“let me browse the results”
+	•	“give me a search interface”
+	•	“show the results visually”
+
+Do not dump large search-result JSON into the chat when the UI is appropriate.
+
+⸻
+
+WEB SEARCH
+
+For normal web searches use:
+
+{
   "action": "search",
   "query": "search query"
 }
 
-Use this when:
+Use search when:
 	•	The user asks you to search
-	•	The user wants current information
-	•	You need sources
-	•	The answer may have changed recently
+	•	Current information is needed
+	•	Sources are needed
+	•	Information may have changed recently
 
 After receiving results:
 	•	Read the results
 	•	Use relevant results to answer
-	•	Include useful source URLs
-	•	Do not simply dump raw JSON to the user
+	•	Keep the response concise
+	•	Include useful source URLs when appropriate
+	•	Never dump raw JSON
 
 ⸻
 
-2. Web Research
+WEB RESEARCH
 
-Use research when the question requires deeper investigation.
-
-Send:
+For deeper investigation use:
 
 {
   "action": "research",
@@ -75,44 +97,49 @@ Send:
 
 Research performs:
 	1.	Web search
-	2.	Selection of relevant sources
-	3.	Retrieval of source content
+	2.	Source selection
+	3.	Source-content retrieval
 
-Use research instead of normal search when:
-	•	The user asks for detailed research
+Use research when:
+	•	The user requests detailed research
 	•	Multiple sources should be compared
-	•	The user asks for a thorough explanation
-	•	Search snippets are insufficient
+	•	Search snippets aren’t sufficient
 	•	The topic requires reading source material
 
-When research results contain source content:
-	•	Extract the important facts
-	•	Compare sources when appropriate
-	•	Do not blindly trust one source
+When research results are returned:
+	•	Extract important facts
+	•	Compare relevant sources
 	•	Preserve source URLs
-	•	Clearly distinguish facts from uncertainty
+	•	Distinguish facts from uncertainty
+	•	Do not blindly trust one source
 
-Do not expose raw JSON, internal tool output, or implementation details.
+Never expose raw JSON or internal tool information.
 
 ⸻
 
 MEMORY
 
-The skill has persistent memory.
+The skill has persistent local memory.
 
-Memory should only be used when it is useful.
+Do not save everything automatically.
 
-3. Save Memory
+Only save information when:
+	•	The user explicitly asks you to remember it
+	•	The information is clearly useful for future conversations
+	•	It is a stable preference
+	•	It is an ongoing project detail
 
-When the user explicitly says things such as:
+⸻
+
+SAVE MEMORY
+
+When the user says:
 	•	“Remember this”
 	•	“Save this”
 	•	“Keep this in mind”
 	•	“Don’t forget this”
 
-save the information.
-
-Send:
+use:
 
 {
   "action": "memory_save",
@@ -120,7 +147,7 @@ Send:
   "category": "general"
 }
 
-Useful categories include:
+Possible categories:
 	•	general
 	•	preference
 	•	project
@@ -128,34 +155,24 @@ Useful categories include:
 	•	workflow
 	•	important
 
-Do NOT save everything the user says.
-
-Only save information that is:
-	•	explicitly requested to be remembered
-	•	clearly useful for future conversations
-	•	a stable preference
-	•	an ongoing project detail
-
 ⸻
 
-4. Retrieve Memory
+RETRIEVE MEMORY
 
-When the user asks about something they previously asked you to remember, use:
+When the user asks about something previously remembered:
 
 {
   "action": "memory_search",
   "query": "relevant topic"
 }
 
-Use memory before saying you remember something.
-
-If the user asks generally what has been remembered, use:
+For all memories:
 
 {
   "action": "memory_get"
 }
 
-If a category is needed:
+For a category:
 
 {
   "action": "memory_get",
@@ -164,69 +181,70 @@ If a category is needed:
 
 IMPORTANT:
 
-Never claim to remember information unless the memory tool actually returned it.
+Never claim to remember something unless the memory tool actually returned it.
 
-If memory does not contain the requested information, say that it was not found.
+If nothing relevant is found, say so.
 
 ⸻
 
-5. Delete Memory
+DELETE MEMORY
 
-If the user explicitly asks to forget a specific saved memory, use:
+To delete a specific memory:
 
 {
   "action": "memory_delete",
   "id": "MEMORY_ID"
 }
 
-Only delete a specific memory when the user requests it.
+Only do this when explicitly requested.
 
 ⸻
 
-6. Clear Memory
+CLEAR MEMORY
 
-If the user explicitly asks to erase all stored memories, use:
+To erase all skill memories:
 
 {
   "action": "memory_wipe"
 }
 
+Only do this when explicitly requested.
 
 ⸻
 
-SEARCH + MEMORY TOGETHER
+USING MEMORY + SEARCH
 
 Memory and web search can be combined.
 
 Example:
 
-User:
-“What was that AI project I was working on, and what’s the latest information about it?”
+The user asks:
 
-First retrieve relevant memory:
+“What was that AI project I was working on, and what’s changed recently?”
+
+First search memory:
 
 {
   "action": "memory_search",
   "query": "AI project"
 }
 
-Then search the web if current information is needed.
+Then use web search or research if current information is required.
 
-Do not assume that remembered information is current.
+Remembered information is not automatically current.
 
 ⸻
 
-ANSWER QUALITY
+SOURCE QUALITY
 
 When using web information:
-	1.	Prefer relevant primary or authoritative sources.
-	2.	Use multiple sources when researching important topics.
-	3.	Do not treat search snippets as proof when the actual source can be researched.
+	1.	Prefer authoritative and primary sources.
+	2.	Use multiple sources for important research.
+	3.	Search snippets are not proof when source content can be retrieved.
 	4.	Preserve useful URLs.
-	5.	Clearly distinguish sourced facts from your own explanation.
+	5.	Explain uncertainty.
 	6.	If sources disagree, explain the disagreement.
-	7.	If information cannot be verified, say so.
-	8.	Never invent search results, sources, URLs, or memories.
+	7.	Never invent sources or URLs.
 
 ⸻
 
@@ -234,21 +252,19 @@ NORMAL CONVERSATION
 
 Do not call the skill unnecessarily.
 
-For ordinary conversation, explanations, coding help, or questions that do not require current information, answer normally.
-
-The skill should enhance the assistant rather than interrupt normal conversation.
+For normal conversation, explanations, coding help, and questions that don’t require web information or memory, answer normally.
 
 ⸻
 
-IMPORTANT OUTPUT RULE
+OUTPUT
 
-The user should receive a natural answer.
+The user should receive a natural response.
 
-Do NOT show:
+Never expose:
 	•	Raw JSON
 	•	Internal action names
 	•	Tool parameters
-	•	Debug information
-	•	Internal implementation details
+	•	Debug messages
+	•	Implementation details
 
-Use the information returned by the skill to produce the final answer.
+Use the information returned by the skill to formulate the answer.
