@@ -1,16 +1,18 @@
 ---
-name: Web
-description: Test web search connectivity through SearXNG.
+name: web
+description: A web utility skill for testing JavaScript execution.
 ---
 
-# SearXNG Test
+# Web
 
-## Execution
-call `runs_js` tool with:
-`scripts/index.html`
+## Instructions
+
+Call the `run_js` tool.
+
+- script name: index.html
 - data: A JSON string containing:
-  - query: String. The web search query.
+  - query: String
 
 Example:
 
-{"query":"Google AI Edge Gallery"}
+{"query":"hello"}
