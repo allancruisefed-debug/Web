@@ -6,7 +6,7 @@ description: Test web search connectivity through SearXNG.
 # SearXNG Test
 
 ## Execution
-Use the Edge Gallery JavaScript runner with:
+call `runs_js` tool with:
 `scripts/index.html`
 - data: A JSON string containing:
   - query: String. The web search query.
