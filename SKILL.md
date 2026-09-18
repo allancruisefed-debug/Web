@@ -7,7 +7,7 @@ description: Test web search connectivity through SearXNG.
 
 Use the `run_js` tool.
 
-- script name: `scripts/index.html`
+- scriptName: `scripts/index.html`
 - data: A JSON string containing:
   - query: String. The web search query.
 
