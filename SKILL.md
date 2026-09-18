@@ -1,5 +1,5 @@
 ---
-name: searx-test
+name: Web
 description: Test web search connectivity through SearXNG.
 ---
 
