@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
+
+  <title>Web Search</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont,
+                   "Segoe UI", sans-serif;
+      background: #0b0b0f;
+      color: #f5f5f7;
+    }
+
+    .app {
+      max-width: 760px;
+      margin: auto;
+      padding: 18px;
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 24px;
+    }
+
+    .search {
+      display: flex;
+      gap: 8px;
+    }
+
+    input {
+      flex: 1;
+      padding: 13px;
+      border-radius: 12px;
+      border: 1px solid #333;
+      background: #17171d;
+      color: white;
+      outline: none;
+      font-size: 16px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      background: #25252d;
+      color: white;
+      cursor: pointer;
+    }
+
+    .search button {
+      background: #ffffff;
+      color: #000000;
+      font-weight: 600;
+    }
+
+    .status {
+      margin: 16px 0;
+      color: #999;
+      font-size: 14px;
+    }
+
+    .result {
+      background: #15151b;
+      border: 1px solid #292930;
+      border-radius: 14px;
+      padding: 15px;
+      margin-bottom: 12px;
+    }
+
+    .title {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 7px;
+    }
+
+    .url {
+      color: #7ab7ff;
+      font-size: 12px;
+      word-break: break-all;
+      margin-bottom: 9px;
+    }
+
+    .description {
+      color: #c8c8ce;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .actions {
+      display: flex;
+      gap: 7px;
+      margin-top: 13px;
+      flex-wrap: wrap;
+    }
+
+    .actions button {
+      font-size: 13px;
+    }
+
+    .empty {
+      text-align: center;
+      color: #888;
+      padding: 40px 10px;
+    }
+
+    .pagination {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="app">
+
+  <h1>🔎 Web Search</h1>
+
+  <div class="search">
+    <input
+      id="query"
+      type="text"
+      placeholder="Search the web..."
+      autocomplete="off"
+    >
+
+    <button onclick="search()">
+      Search
+    </button>
+  </div>
+
+  <div id="status" class="status">
+    Ready
+  </div>
+
+  <div id="results"></div>
+
+  <div id="pagination"
+       class="pagination"></div>
+
+</div>
+
+
+<script>
+
+const ENDPOINT =
+  "https://web.allancruise-fed.workers.dev/";
+
+let currentQuery = "";
+let currentPage = 1;
+
+
+// ========================================
+// SEARCH
+// ========================================
+
+async function search(page = 1) {
+
+  const input =
+    document.getElementById("query");
+
+  const query =
+    input.value.trim();
+
+  if (!query) return;
+
+  currentQuery = query;
+  currentPage = page;
+
+  setStatus("Searching...");
+
+  document.getElementById("results").innerHTML = "";
+  document.getElementById("pagination").innerHTML = "";
+
+  try {
+
+    const response =
+      await fetch(
+        ENDPOINT +
+        "?q=" +
+        encodeURIComponent(query) +
+        "&page=" +
+        page
+      );
+
+    if (!response.ok) {
+      throw new Error(
+        "HTTP " + response.status
+      );
+    }
+
+    const data =
+      await response.json();
+
+    displayResults(data);
+
+  } catch (error) {
+
+    setStatus(
+      "Search failed: " +
+      error.message
+    );
+
+  }
+}
+
+
+// ========================================
+// DISPLAY RESULTS
+// ========================================
+
+function displayResults(data) {
+
+  const container =
+    document.getElementById("results");
+
+  const results =
+    data.results || [];
+
+  if (!results.length) {
+
+    container.innerHTML =
+      `<div class="empty">
+        No results found.
+       </div>`;
+
+    setStatus("No results");
+
+    return;
+  }
+
+  setStatus(
+    `${data.total || results.length} results`
+  );
+
+  container.innerHTML =
+    results.map((item) => {
+
+      const title =
+        escapeHTML(
+          item.title || "Untitled"
+        );
+
+      const description =
+        escapeHTML(
+          item.description || ""
+        );
+
+      const url =
+        escapeHTML(
+          item.url || ""
+        );
+
+      return `
+        <div class="result">
+
+          <div class="title">
+            ${title}
+          </div>
+
+          <div class="url">
+            ${url}
+          </div>
+
+          <div class="description">
+            ${description}
+          </div>
+
+          <div class="actions">
+
+            <button
+              onclick="openUrl('${escapeJS(item.url)}')">
+              Open
+            </button>
+
+            <button
+              onclick="copyUrl('${escapeJS(item.url)}')">
+              Copy URL
+            </button>
+
+            <button
+              onclick="research('${escapeJS(item.url)}')">
+              Research
+            </button>
+
+          </div>
+
+        </div>
+      `;
+
+    }).join("");
+
+  renderPagination(data);
+}
+
+
+// ========================================
+// RESEARCH
+// ========================================
+
+async function research(url) {
+
+  setStatus("Researching source...");
+
+  try {
+
+    const response =
+      await fetch(
+        ENDPOINT +
+        "?url=" +
+        encodeURIComponent(url)
+      );
+
+    if (!response.ok) {
+      throw new Error(
+        "HTTP " + response.status
+      );
+    }
+
+    const data =
+      await response.json();
+
+    const content =
+      data.content ||
+      data.text ||
+      data.summary ||
+      "No readable content returned.";
+
+    alert(content);
+
+    setStatus("Research complete");
+
+  } catch (error) {
+
+    setStatus(
+      "Research failed: " +
+      error.message
+    );
+
+  }
+}
+
+
+// ========================================
+// OPEN
+// ========================================
+
+function openUrl(url) {
+
+  window.open(
+    url,
+    "_blank"
+  );
+}
+
+
+// ========================================
+// COPY
+// ========================================
+
+async function copyUrl(url) {
+
+  try {
+
+    await navigator.clipboard.writeText(url);
+
+    setStatus("URL copied");
+
+  } catch {
+
+    setStatus("Unable to copy URL");
+
+  }
+}
+
+
+// ========================================
+// PAGINATION
+// ========================================
+
+function renderPagination(data) {
+
+  const container =
+    document.getElementById(
+      "pagination"
+    );
+
+  if (currentPage > 1) {
+
+    container.innerHTML += `
+      <button
+        onclick="search(${currentPage - 1})">
+        ← Previous
+      </button>
+    `;
+  }
+
+  if (data.hasNext) {
+
+    container.innerHTML += `
+      <button
+        onclick="search(${currentPage + 1})">
+        Next →
+      </button>
+    `;
+  }
+}
+
+
+// ========================================
+// HELPERS
+// ========================================
+
+function setStatus(text) {
+
+  document.getElementById(
+    "status"
+  ).textContent = text;
+}
+
+
+function escapeHTML(value) {
+
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+
+function escapeJS(value) {
+
+  return String(value)
+    .replaceAll("\\", "\\\\")
+    .replaceAll("'", "\\'");
+}
+
+
+// ========================================
+// ENTER KEY
+// ========================================
+
+document
+  .getElementById("query")
+  .addEventListener(
+    "keydown",
+    event => {
+
+      if (event.key === "Enter") {
+        search();
+      }
+
+    }
+  );
+
+</script>
+
+</body>
+</html>
