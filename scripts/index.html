@@ -6,14 +6,10 @@
 <body>
 
 <script>
-window["ai_edge_gallery_get_result"] = async (data) => {
-  return JSON.stringify({
-    result: {
-      success: true,
-      message: "🔥 JAVASCRIPT SKILL IS WORKING!",
-      received: data
-    }
-  });
+window.ai_edge_gallery_get_result = async function(data) {
+    return JSON.stringify({
+        result: "🔥 JS SKILL WORKS!"
+    });
 };
 </script>
 
