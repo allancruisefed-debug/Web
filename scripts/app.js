@@ -94,6 +94,48 @@ function wipeMemory() {
   };
 }
 
+// ==================================================
+// FLOW
+// ==================================================
+
+if (action === "flow") {
+
+  const commands =
+    Array.isArray(input?.commands)
+      ? input.commands
+      : [];
+
+  if (commands.length === 0) {
+    return JSON.stringify({
+      error:
+        "Flow requires at least one command."
+    });
+  }
+
+  if (commands.length > 4) {
+    return JSON.stringify({
+      error:
+        "Flow supports a maximum of 4 commands."
+    });
+  }
+
+  const flowData =
+    input?.data || {};
+
+  const flowResult =
+    await window.webFlow(
+      commands,
+      flowData
+    );
+
+  return JSON.stringify({
+    result: {
+      action: "flow",
+      commands,
+      data: flowResult
+    }
+  });
+}
 
 // ======================================================
 // SEARCH
