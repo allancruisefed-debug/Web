@@ -94,48 +94,6 @@ function wipeMemory() {
   };
 }
 
-// ==================================================
-// FLOW
-// ==================================================
-
-if (action === "flow") {
-
-  const commands =
-    Array.isArray(input?.commands)
-      ? input.commands
-      : [];
-
-  if (commands.length === 0) {
-    return JSON.stringify({
-      error:
-        "Flow requires at least one command."
-    });
-  }
-
-  if (commands.length > 4) {
-    return JSON.stringify({
-      error:
-        "Flow supports a maximum of 4 commands."
-    });
-  }
-
-  const flowData =
-    input?.data || {};
-
-  const flowResult =
-    await window.webFlow(
-      commands,
-      flowData
-    );
-
-  return JSON.stringify({
-    result: {
-      action: "flow",
-      commands,
-      data: flowResult
-    }
-  });
-}
 
 // ======================================================
 // SEARCH
@@ -181,6 +139,50 @@ window.ai_edge_gallery_get_result =
         String(
           input?.action || "search"
         ).toLowerCase();
+
+
+      // ==================================================
+      // FLOW
+      // ==================================================
+
+      if (action === "flow") {
+
+        const commands =
+          Array.isArray(input?.commands)
+            ? input.commands
+            : [];
+
+        if (commands.length === 0) {
+          return JSON.stringify({
+            error:
+              "Flow requires at least one command."
+          });
+        }
+
+        if (commands.length > 4) {
+          return JSON.stringify({
+            error:
+              "Flow supports a maximum of 4 commands."
+          });
+        }
+
+        const flowData =
+          input?.data || {};
+
+        const flowResult =
+          await window.webFlow(
+            commands,
+            flowData
+          );
+
+        return JSON.stringify({
+          result: {
+            action: "flow",
+            commands,
+            data: flowResult
+          }
+        });
+      }
 
 
       // ==================================================
@@ -405,31 +407,34 @@ window.ai_edge_gallery_get_result =
 
     }
   };
+
+
+// ======================================================
 // FLOW CONNECTIONS
+// ======================================================
 
 window.webSearch = searchWeb;
 
 window.webResearch = async function(url) {
-    const response = await fetch(
-        SEARCH_ENDPOINT +
-        "?url=" +
-        encodeURIComponent(url)
+
+  const response =
+    await fetch(
+      SEARCH_ENDPOINT +
+      "?url=" +
+      encodeURIComponent(url)
     );
 
-    if (!response.ok) {
-        throw new Error(
-            "Research failed: HTTP " + response.status
-        );
-    }
+  if (!response.ok) {
+    throw new Error(
+      "Research failed: HTTP " +
+      response.status
+    );
+  }
 
-    return await response.json();
+  return await response.json();
 };
 
 window.webMemorySave = async function(content) {
-    remember(content);
 
-    return {
-        success: true,
-        message: "Saved to Web memory."
-    };
+  return remember(content);
 };
