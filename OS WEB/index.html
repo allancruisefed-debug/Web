@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio OS — Freelance Website Business Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="errBanner" style="display:none;position:fixed;top:0;left:0;right:0;background:#cc0000;color:#fff;padding:10px 16px;font-family:monospace;font-size:12px;z-index:9999;white-space:pre-wrap;"></div>
+
+<div class="app">
+<aside class="sidebar">
+<div class="brand"><span class="brand-dot"></span><span>STUDIO / OS</span></div>
+<nav class="nav">
+<button class="nav-item active" data-view="today" onclick="showView('today')">Today<span class="nav-count" id="todayCount">0</span></button>
+<button class="nav-item" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
+<button class="nav-item" data-view="leads" onclick="showView('leads')">Leads<span class="nav-count" id="leadCount">0</span></button>
+<button class="nav-item" data-view="clients" onclick="showView('clients')">Clients<span class="nav-count" id="clientCount">0</span></button>
+<button class="nav-item" data-view="proposals" onclick="showView('proposals')">Proposals<span class="nav-count" id="proposalCount">0</span></button>
+<button class="nav-item" data-view="invoices" onclick="showView('invoices')">Invoices</button>
+<button class="nav-item" data-view="demos" onclick="showView('demos')">Demos</button>
+<button class="nav-item" data-view="time" onclick="showView('time')">Time</button>
+<button class="nav-item" data-view="scripts" onclick="showView('scripts')">Scripts</button>
+<button class="nav-item" data-view="playbook" onclick="showView('playbook')">Playbook</button>
+<button class="nav-item" data-view="settings" onclick="showView('settings')">Settings</button>
+</nav>
+<div class="sidebar-foot">
+<button class="nav-item" onclick="toggleTheme()"><span id="themeLabel">Dark mode</span></button>
+<button class="nav-item" onclick="exportBackup()">Export JSON</button>
+<button class="nav-item" onclick="document.getElementById('importFile').click()">Import JSON</button>
+<input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
+</div>
+</aside>
+
+<div class="main">
+<div class="topbar">
+<div class="search"><input type="text" id="searchInput" placeholder="Search everything… (press / to focus)" oninput="doSearch(this.value)" onfocus="doSearch(this.value)"><div class="search-results" id="searchResults"></div></div>
+<span class="label" id="syncStatus">Local only</span>
+<span class="label" id="topClock">—</span>
+<button class="btn btn-primary btn-sm" onclick="quickAddMenu()">+ Add</button>
+</div>
+
+<section class="view active" id="view-today">
+<div class="view-head"><div><h1>Today</h1><div class="sub">Everything that needs you right now.</div></div>
+<div class="row"><button class="btn btn-sm" onclick="openBulkImport()">Import leads</button></div></div>
+<div id="todayContent"></div>
+</section>
+
+<section class="view" id="view-dashboard">
+<div class="view-head"><div><h1>Dashboard</h1><div class="sub">Your business at a glance.</div></div></div>
+<div class="grid-4 mb">
+<div class="stat"><div class="n accent" id="sRevenue">$0</div><div class="l">Collected this year</div><div class="d" id="sRevenuePending">$0 pending</div></div>
+<div class="stat"><div class="n" id="sPipeline">$0</div><div class="l">Weighted pipeline</div><div class="d" id="sPipelineRaw">$0 raw</div></div>
+<div class="stat"><div class="n" id="sClients">0</div><div class="l">Active clients</div><div class="d" id="sRetainers">0 on retainer</div></div>
+<div class="stat"><div class="n" id="sLeads">0</div><div class="l">Open leads</div><div class="d" id="sLeadsDue">0 due this week</div></div>
+</div>
+<div class="panel"><div class="panel-head"><h2>Lead pipeline — every stage</h2></div><div id="leadStageTable"></div></div>
+<div class="panel"><div class="panel-head"><h2>Due this week</h2></div><div id="dueThisWeek"></div></div>
+<div class="grid-2">
+<div class="panel"><div class="panel-head"><h2>Needs attention</h2></div><div id="attentionList"></div></div>
+<div class="panel"><div class="panel-head"><h2>Recent activity</h2></div><div id="recentActivity"></div></div>
+</div>
+<div class="grid-2">
+<div class="panel"><div class="panel-head"><h2>Revenue (12 months)</h2></div><div id="revenueChart"></div></div>
+<div class="panel"><div class="panel-head"><h2>Source performance</h2></div><div id="sourceChart"></div></div>
+</div>
+</section>
+
+<section class="view" id="view-leads">
+<div class="view-head"><div><h1>Leads</h1><div class="sub">Click any card to open. Outreach buttons on each card.</div></div>
+<div class="row"><button class="btn" onclick="openBulkImport()">Import</button><button class="btn btn-primary" onclick="openLeadForm()">+ New lead</button></div></div>
+<div class="kanban" id="kanban"></div>
+</section>
+
+<section class="view" id="view-clients">
+<div class="view-head"><div><h1>Clients</h1><div class="sub">Active projects, checklists, retainers, time tracking.</div></div>
+<button class="btn btn-primary" onclick="openClientForm()">+ New client</button></div>
+<div class="panel"><div id="clientsList"></div></div>
+</section>
+
+<section class="view" id="view-proposals">
+<div class="view-head"><div><h1>Proposals</h1><div class="sub">Draft → Sent → Viewed → Accepted/Declined.</div></div>
+<button class="btn btn-primary" onclick="openProposalForm()">+ New proposal</button></div>
+<div id="proposalsList"></div>
+</section>
+
+<section class="view" id="view-invoices">
+<div class="view-head"><div><h1>Invoices</h1><div class="sub">Deposits, finals, retainers.</div></div>
+<button class="btn btn-primary" onclick="openInvoiceForm()">+ New invoice</button></div>
+<div class="grid-3 mb">
+<div class="stat"><div class="n accent" id="invPaid">$0</div><div class="l">Paid</div></div>
+<div class="stat"><div class="n" id="invPending">$0</div><div class="l">Pending</div></div>
+<div class="stat"><div class="n" id="invOverdue">$0</div><div class="l">Overdue</div></div>
+</div>
+<div class="panel"><div id="invoicesList"></div></div>
+</section>
+
+<section class="view" id="view-demos">
+<div class="view-head"><div><h1>Demos</h1><div class="sub">Cloudflare Pages previews with 60-day cleanup reminders.</div></div>
+<button class="btn btn-primary" onclick="openDemoForm()">+ New demo</button></div>
+<div class="panel"><div id="demosList"></div></div>
+</section>
+
+<section class="view" id="view-time">
+<div class="view-head"><div><h1>Time</h1><div class="sub">Hourly log. Invoice directly from logged time.</div></div>
+<button class="btn btn-primary" onclick="openTimeForm()">+ Log time</button></div>
+<div class="grid-3 mb">
+<div class="stat"><div class="n accent" id="timeMonth">0h</div><div class="l">This month</div></div>
+<div class="stat"><div class="n" id="timeUnbilled">0h</div><div class="l">Unbilled</div></div>
+<div class="stat"><div class="n" id="timeValue">$0</div><div class="l">Unbilled value</div></div>
+</div>
+<div class="panel"><div id="timeList"></div></div>
+</section>
+
+<section class="view" id="view-scripts">
+<div class="view-head"><div><h1>Scripts</h1><div class="sub">Editable. Click title or body. Deleted scripts can be restored.</div></div>
+<div class="row">
+<label class="chip" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;cursor:pointer"><input type="checkbox" id="showDeletedScripts" onchange="renderScripts()"> Show deleted</label>
+<button class="btn" onclick="addScript()">+ New script</button>
+</div></div>
+<div id="scriptsList"></div>
+</section>
+
+<section class="view" id="view-playbook">
+<div class="view-head"><div><h1>Playbook</h1><div class="sub">Full deployment reference.</div></div></div>
+<div id="playbookContent"></div>
+</section>
+
+<section class="view" id="view-settings">
+<div class="view-head"><div><h1>Settings</h1><div class="sub">Auto-saves as you type.</div></div></div>
+
+<div class="panel"><div class="panel-head"><h2>Cloud sync — phone + laptop</h2></div>
+<p style="font-size:11px;color:var(--muted);margin-bottom:10px">Sync via Firebase Realtime Database. Free, no build, no SDK.</p>
+<div class="field"><label>Firebase database URL</label><input type="text" id="setSyncUrl" placeholder="https://your-project-default-rtdb.firebaseio.com" oninput="saveSetting('syncUrl', this.value)"></div>
+<div class="field"><label>Sync code (any password — same on both devices)</label><input type="text" id="setSyncCode" placeholder="e.g. pool-co-2026" oninput="saveSetting('syncCode', this.value)"></div>
+<div class="row" style="flex-wrap:wrap;margin-bottom:8px">
+<button class="btn btn-sm" onclick="enableSync()">Enable sync</button>
+<button class="btn btn-sm" onclick="syncNow()">Sync now</button>
+<button class="btn btn-sm" onclick="disableSync()">Disable sync</button>
+</div>
+<div style="font-size:11px;color:var(--muted);line-height:1.7">
+<strong>Setup (5 min):</strong><br>
+1. Go to <code>console.firebase.google.com</code> → Add project<br>
+2. Build → Realtime Database → Create Database → <em>Start in test mode</em><br>
+3. Copy the URL at the top (looks like <code>https://xxxx-default-rtdb.firebaseio.com</code>)<br>
+4. Paste it above, pick a sync code, click <strong>Enable sync</strong><br>
+5. Open the site on your phone, paste the <em>same</em> URL + code → Enable sync<br>
+<br><span id="syncStatusLong" style="color:var(--ink)">Status: local only</span>
+</div>
+</div>
+
+<div class="panel"><div class="panel-head"><h2>Business info</h2></div>
+<div class="field-row">
+<div class="field"><label>Your name</label><input type="text" id="setName" oninput="saveSetting('name', this.value)"></div>
+<div class="field"><label>Your email</label><input type="text" id="setEmail" oninput="saveSetting('email', this.value)"></div>
+</div>
+<div class="field-row">
+<div class="field"><label>Brand name</label><input type="text" id="setBrand" oninput="saveSetting('brand', this.value)"></div>
+<div class="field"><label>Your phone</label><input type="text" id="setPhone" oninput="saveSetting('phone', this.value)"></div>
+</div>
+<div class="field-row">
+<div class="field"><label>Location</label><input type="text" id="setLocation" oninput="saveSetting('location', this.value)"></div>
+<div class="field"><label>Payoneer prefix</label><input type="text" id="setPayoneer" oninput="saveSetting('payoneer', this.value)"></div>
+</div>
+</div>
+
+<div class="panel"><div class="panel-head"><h2>Rates &amp; packages</h2></div>
+<div class="field-row">
+<div class="field"><label>Site only ($)</label><input type="number" id="setPriceBasic" oninput="saveSetting('priceBasic', +this.value)"></div>
+<div class="field"><label>Standard ($)</label><input type="number" id="setPriceStd" oninput="saveSetting('priceStd', +this.value)"></div>
+</div>
+<div class="field-row">
+<div class="field"><label>Premium ($)</label><input type="number" id="setPricePrem" oninput="saveSetting('pricePrem', +this.value)"></div>
+<div class="field"><label>Monthly retainer ($)</label><input type="number" id="setRetainer" oninput="saveSetting('retainer', +this.value)"></div>
+</div>
+<div class="field-row">
+<div class="field"><label>Hourly rate ($)</label><input type="number" id="setHourly" oninput="saveSetting('hourly', +this.value)"></div>
+<div class="field"><label>Deposit %</label><input type="number" id="setDepositPct" oninput="saveSetting('depositPct', +this.value)"></div>
+</div>
+</div>
+
+<div class="panel"><div class="panel-head"><h2>Automations</h2></div>
+<div class="field-row">
+<div class="field"><label>Auto follow-up after outreach (days)</label><input type="number" id="setFollowUpDays" min="1" max="30" oninput="saveSetting('followUpDays', +this.value)"></div>
+<div class="field"><label>Retainer billing day (1-28)</label><input type="number" id="setRetainerBillingDay" min="1" max="28" oninput="saveSetting('retainerBillingDay', +this.value)"></div>
+</div>
+<div class="field-row">
+<div class="field"><label>Stale lead threshold (days)</label><input type="number" id="setStaleDays" min="1" max="60" oninput="saveSetting('staleDays', +this.value)"></div>
+<div class="field"><label>Invoice overdue threshold (days)</label><input type="number" id="setOverdueDays" min="1" max="90" oninput="saveSetting('overdueDays', +this.value)"></div>
+</div>
+</div>
+
+<div class="panel"><div class="panel-head"><h2>Proposal terms</h2></div>
+<div class="field"><textarea id="setTerms" style="min-height:150px" oninput="saveSetting('terms', this.value)"></textarea></div>
+</div>
+
+<div class="panel"><div class="panel-head"><h2>Export data</h2></div>
+<div class="row" style="flex-wrap:wrap">
+<button class="btn btn-sm" onclick="exportBackup()">Export JSON</button>
+<button class="btn btn-sm" onclick="exportCSV('leads')">Leads CSV</button>
+<button class="btn btn-sm" onclick="exportCSV('clients')">Clients CSV</button>
+<button class="btn btn-sm" onclick="exportCSV('invoices')">Invoices CSV</button>
+<button class="btn btn-sm" onclick="exportCSV('time')">Time CSV</button>
+<button class="btn btn-sm" onclick="exportCSV('lost')">Lost CSV</button>
+</div>
+</div>
+
+<div class="panel"><div class="panel-head"><h2>Danger zone</h2></div>
+<button class="btn" onclick="resetAllData()" style="background:var(--danger);color:#fff;border-color:var(--danger)">Reset all data</button>
+</div>
+</section>
+
+</div>
+</div>
+
+<div class="modal-back" id="modalBack" onclick="if(event.target===this)closeModal()">
+<div class="modal">
+<div class="modal-head"><h3 id="modalTitle">—</h3><button class="modal-close" onclick="closeModal()">✕</button></div>
+<div class="modal-body" id="modalBody"></div>
+<div class="modal-foot" id="modalFoot"></div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+window.addEventListener('error', function(e){
+  if (e.message && e.message.indexOf('is not defined') !== -1) return;
+  var b = document.getElementById('errBanner');
+  if (b) { b.style.display = 'block'; b.textContent = 'Script error: ' + (e.message || 'unknown') + ' — line ' + (e.lineno || '?'); }
+});
+</script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script src="features.js"></script>
+<script src="commands.js"></script>
+<script>
+(function(){
+  if (typeof window.initStudioOS !== 'function') {
+    var b = document.getElementById('errBanner');
+    if (b) { b.style.display = 'block'; b.textContent = 'app.js did not load. All 5 files must be in the same folder:\nindex.html, styles.css, data.js, app.js, features.js'; }
+    return;
+  }
+  try { window.initStudioOS(); }
+  catch(e){
+    var b2 = document.getElementById('errBanner');
+    if (b2) { b2.style.display = 'block'; b2.textContent = 'Boot failed: ' + e.message; }
+    if (window.console) console.error(e);
+  }
+})();
+</script>
+
+</body>
+</html>
