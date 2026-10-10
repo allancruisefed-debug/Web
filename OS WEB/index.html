@@ -23,6 +23,7 @@
 <button class="nav-item" data-view="clients" onclick="showView('clients')">Clients<span class="nav-count" id="clientCount">0</span></button>
 <button class="nav-item" data-view="proposals" onclick="showView('proposals')">Proposals<span class="nav-count" id="proposalCount">0</span></button>
 <button class="nav-item" data-view="invoices" onclick="showView('invoices')">Invoices</button>
+<button class="nav-item" data-view="deployments" onclick="showView('deployments')">Deployments<span class="nav-count" id="deployCount">0</span></button>
 <button class="nav-item" data-view="demos" onclick="showView('demos')">Demos</button>
 <button class="nav-item" data-view="time" onclick="showView('time')">Time</button>
 <button class="nav-item" data-view="scripts" onclick="showView('scripts')">Scripts</button>
@@ -31,6 +32,7 @@
 </nav>
 <div class="sidebar-foot">
 <button class="nav-item" onclick="toggleTheme()"><span id="themeLabel">Dark mode</span></button>
+<button class="nav-item" onclick="showHelp()">? Help</button>
 <button class="nav-item" onclick="exportBackup()">Export JSON</button>
 <button class="nav-item" onclick="document.getElementById('importFile').click()">Import JSON</button>
 <input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
@@ -39,15 +41,16 @@
 
 <div class="main">
 <div class="topbar">
-<div class="search"><input type="text" id="searchInput" placeholder="Search everything… (press / to focus)" oninput="doSearch(this.value)" onfocus="doSearch(this.value)"><div class="search-results" id="searchResults"></div></div>
+<div class="search"><input type="text" id="searchInput" placeholder="Search everything…" oninput="doSearch(this.value)" onfocus="doSearch(this.value)"><div class="search-results" id="searchResults"></div></div>
 <span class="label" id="syncStatus">Local only</span>
 <span class="label" id="topClock">—</span>
+<button class="btn btn-sm" onclick="showHelp()">?</button>
 <button class="btn btn-primary btn-sm" onclick="quickAddMenu()">+ Add</button>
 </div>
 
 <section class="view active" id="view-today">
 <div class="view-head"><div><h1>Today</h1><div class="sub">Everything that needs you right now.</div></div>
-<div class="row"><button class="btn btn-sm" onclick="openBulkImport()">Import leads</button></div></div>
+<div class="row"><button class="btn btn-sm" onclick="openBulkImport()">Import leads</button><button class="btn btn-sm" onclick="showHelp('today')">?</button></div></div>
 <div id="todayContent"></div>
 </section>
 
@@ -72,13 +75,13 @@
 </section>
 
 <section class="view" id="view-leads">
-<div class="view-head"><div><h1>Leads</h1><div class="sub">Click any card to open. Outreach buttons on each card.</div></div>
+<div class="view-head"><div><h1>Leads</h1><div class="sub">Click any card to open. Demo URLs open in a new tab.</div></div>
 <div class="row"><button class="btn" onclick="openBulkImport()">Import</button><button class="btn btn-primary" onclick="openLeadForm()">+ New lead</button></div></div>
 <div class="kanban" id="kanban"></div>
 </section>
 
 <section class="view" id="view-clients">
-<div class="view-head"><div><h1>Clients</h1><div class="sub">Active projects, checklists, retainers, time tracking.</div></div>
+<div class="view-head"><div><h1>Clients</h1><div class="sub">Staging, live URLs, deploy log, checklist, retainers.</div></div>
 <button class="btn btn-primary" onclick="openClientForm()">+ New client</button></div>
 <div class="panel"><div id="clientsList"></div></div>
 </section>
@@ -98,6 +101,16 @@
 <div class="stat"><div class="n" id="invOverdue">$0</div><div class="l">Overdue</div></div>
 </div>
 <div class="panel"><div id="invoicesList"></div></div>
+</section>
+
+<section class="view" id="view-deployments">
+<div class="view-head"><div><h1>Deployments</h1><div class="sub">Every staging and live upload, per client.</div></div>
+<div class="row">
+<select id="deployFilterClient" onchange="renderDeployments()" style="padding:6px 10px;border:2px solid var(--line);background:var(--surface);font-family:var(--mono);font-size:11px"><option value="">All clients</option></select>
+<button class="btn" onclick="showHelp('deployments')">?</button>
+<button class="btn btn-primary" onclick="openDeployForm()">+ Log deploy</button>
+</div></div>
+<div class="panel"><div id="deploymentsList"></div></div>
 </section>
 
 <section class="view" id="view-demos">
@@ -127,31 +140,24 @@
 </section>
 
 <section class="view" id="view-playbook">
-<div class="view-head"><div><h1>Playbook</h1><div class="sub">Full deployment reference.</div></div></div>
+<div class="view-head"><div><h1>Playbook</h1><div class="sub">Cloudflare-only deployment reference.</div></div></div>
 <div id="playbookContent"></div>
 </section>
 
 <section class="view" id="view-settings">
-<div class="view-head"><div><h1>Settings</h1><div class="sub">Auto-saves as you type.</div></div></div>
+<div class="view-head"><div><h1>Settings</h1><div class="sub">Auto-saves as you type.</div></div>
+<button class="btn" onclick="showHelp('settings')">?</button></div>
 
 <div class="panel"><div class="panel-head"><h2>Cloud sync — phone + laptop</h2></div>
-<p style="font-size:11px;color:var(--muted);margin-bottom:10px">Sync via Firebase Realtime Database. Free, no build, no SDK.</p>
-<div class="field"><label>Firebase database URL</label><input type="text" id="setSyncUrl" placeholder="https://your-project-default-rtdb.firebaseio.com" oninput="saveSetting('syncUrl', this.value)"></div>
-<div class="field"><label>Sync code (any password — same on both devices)</label><input type="text" id="setSyncCode" placeholder="e.g. pool-co-2026" oninput="saveSetting('syncCode', this.value)"></div>
+<p style="font-size:11px;color:var(--muted);margin-bottom:10px">Sync via JSONBin.io. Free tier, email signup only.</p>
+<div class="field"><label>JSONBin Master Key</label><input type="text" id="setSyncUrl" placeholder="$2b$10$..." oninput="saveSetting('syncUrl', this.value)"></div>
+<div class="field"><label>Bin ID</label><input type="text" id="setSyncCode" placeholder="auto-created on Enable" oninput="saveSetting('syncCode', this.value)"></div>
 <div class="row" style="flex-wrap:wrap;margin-bottom:8px">
 <button class="btn btn-sm" onclick="enableSync()">Enable sync</button>
 <button class="btn btn-sm" onclick="syncNow()">Sync now</button>
 <button class="btn btn-sm" onclick="disableSync()">Disable sync</button>
 </div>
-<div style="font-size:11px;color:var(--muted);line-height:1.7">
-<strong>Setup (5 min):</strong><br>
-1. Go to <code>console.firebase.google.com</code> → Add project<br>
-2. Build → Realtime Database → Create Database → <em>Start in test mode</em><br>
-3. Copy the URL at the top (looks like <code>https://xxxx-default-rtdb.firebaseio.com</code>)<br>
-4. Paste it above, pick a sync code, click <strong>Enable sync</strong><br>
-5. Open the site on your phone, paste the <em>same</em> URL + code → Enable sync<br>
-<br><span id="syncStatusLong" style="color:var(--ink)">Status: local only</span>
-</div>
+<div id="syncHelp" style="font-size:11px;color:var(--muted);line-height:1.7"></div>
 </div>
 
 <div class="panel"><div class="panel-head"><h2>Business info</h2></div>
@@ -205,6 +211,7 @@
 <button class="btn btn-sm" onclick="exportCSV('leads')">Leads CSV</button>
 <button class="btn btn-sm" onclick="exportCSV('clients')">Clients CSV</button>
 <button class="btn btn-sm" onclick="exportCSV('invoices')">Invoices CSV</button>
+<button class="btn btn-sm" onclick="exportCSV('deploys')">Deploys CSV</button>
 <button class="btn btn-sm" onclick="exportCSV('time')">Time CSV</button>
 <button class="btn btn-sm" onclick="exportCSV('lost')">Lost CSV</button>
 </div>
@@ -242,7 +249,7 @@ window.addEventListener('error', function(e){
 (function(){
   if (typeof window.initStudioOS !== 'function') {
     var b = document.getElementById('errBanner');
-    if (b) { b.style.display = 'block'; b.textContent = 'app.js did not load. All 5 files must be in the same folder:\nindex.html, styles.css, data.js, app.js, features.js'; }
+    if (b) { b.style.display = 'block'; b.textContent = 'app.js did not load. All 6 files must be in the same folder:\nindex.html, styles.css, data.js, app.js, features.js, commands.js'; }
     return;
   }
   try { window.initStudioOS(); }
