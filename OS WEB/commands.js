@@ -12,6 +12,7 @@ function openDeletePicker(kind){
   else if (kind === 'proposal') items = state.proposals.map(function(x){ return {id:x.id, label:x.business||'Proposal', meta:fmt$(x.amount)+' — '+x.status}; });
   else if (kind === 'demo') items = state.demos.map(function(x){ return {id:x.id, label:x.business, meta:x.url}; });
   else if (kind === 'time') items = state.timeEntries.map(function(x){ return {id:x.id, label:x.note||'Time entry', meta:x.date+' — '+((x.minutes||0)/60).toFixed(2)+'h'}; });
+  else if (kind === 'deploy') items = (state.deploys||[]).map(function(x){ return {id:x.id, label:(x.clientName||'(no client)')+' '+x.target, meta:x.date+' — '+x.status}; });
 
   window._dpItems = items;
   window._dpKind = kind;
@@ -47,26 +48,22 @@ function dpPick(kind, id){
   else if (kind === 'proposal') state.proposals = state.proposals.filter(function(x){ return x.id !== id; });
   else if (kind === 'demo') state.demos = state.demos.filter(function(x){ return x.id !== id; });
   else if (kind === 'time') state.timeEntries = state.timeEntries.filter(function(x){ return x.id !== id; });
+  else if (kind === 'deploy') state.deploys = (state.deploys||[]).filter(function(x){ return x.id !== id; });
   saveState(); closeModal(); renderAll(); toast('Deleted','warn');
 }
 
 /* --- Lead filters --- */
 function filterLeadsBySource(s){
   leadFilter = {type:'source', value:s};
-  showView('leads');
-  renderLeads();
-  closeSearch();
+  showView('leads'); renderLeads(); closeSearch();
 }
 function filterLeadsByStage(s){
   leadFilter = {type:'stage', value:s};
-  showView('leads');
-  renderLeads();
-  closeSearch();
+  showView('leads'); renderLeads(); closeSearch();
 }
 function clearLeadFilter(){
   leadFilter = null;
-  showView('leads');
-  renderLeads();
+  showView('leads'); renderLeads();
 }
 function renderFilteredLeads(){
   var kb = document.getElementById('kanban'); if (!kb) return;
@@ -88,7 +85,6 @@ function renderFilteredLeads(){
   kb.innerHTML = html;
 }
 
-/* Override renderLeads to respect the filter */
 (function(){
   var _orig = window.renderLeads;
   window.renderLeads = function(){
@@ -101,20 +97,21 @@ function renderFilteredLeads(){
 function showCommandHelp(){
   closeSearch();
   var html = '<div style="font-size:12px;line-height:1.9">' +
-    '<p style="margin-bottom:12px">Type a special character in the search bar to switch to command mode.</p>' +
+    '<p style="margin-bottom:12px">Type a special character in the search bar to switch to command mode. Or press <code>?</code> for this list.</p>' +
     '<table class="tbl" style="font-size:12px">' +
     '<thead><tr><th>Prefix</th><th>Action</th><th>Example</th></tr></thead><tbody>' +
-    '<tr><td><code>+</code></td><td>Create new</td><td><code>+lead</code> &nbsp; <code>+invoice</code></td></tr>' +
+    '<tr><td><code>+</code></td><td>Create new</td><td><code>+lead</code> &nbsp; <code>+invoice</code> &nbsp; <code>+deploy</code></td></tr>' +
     '<tr><td><code>-</code></td><td>Delete record</td><td><code>-lead</code> &nbsp; <code>-client</code></td></tr>' +
-    '<tr><td><code>&gt;</code></td><td>Navigate</td><td><code>&gt;today</code> &nbsp; <code>&gt;settings</code></td></tr>' +
+    '<tr><td><code>&gt;</code></td><td>Navigate</td><td><code>&gt;today</code> &nbsp; <code>&gt;deployments</code> &nbsp; <code>&gt;cf</code></td></tr>' +
     '<tr><td><code>/</code></td><td>Filter views</td><td><code>/stale</code> &nbsp; <code>/overdue</code></td></tr>' +
     '<tr><td><code>@</code></td><td>Filter by source</td><td><code>@maps</code> &nbsp; <code>@referral</code></td></tr>' +
     '<tr><td><code>#</code></td><td>Filter by stage</td><td><code>#contacted</code> &nbsp; <code>#proposal</code></td></tr>' +
     '</tbody></table>' +
-    '<p style="margin-top:16px">Type anything else to search across leads, clients, and invoices.</p>' +
-    '<p style="margin-top:8px">Tip: press <code>Enter</code> to run the first match. Press <code>Esc</code> to close.</p>' +
+    '<p style="margin-top:16px">Plain text searches across leads, clients, invoices, proposals.</p>' +
+    '<p style="margin-top:8px">Tip: press <code>Enter</code> to run the first match. Press <code>Esc</code> to close. Press <code>Ctrl+K</code> or <code>/</code> to focus search.</p>' +
+    '<p style="margin-top:16px"><strong>Need a tour?</strong> Click the <em>Help</em> button in the sidebar for section-by-section explanations.</p>' +
     '</div>';
-  openModal('Command reference', html, '<button class="btn btn-primary" onclick="closeModal()">Got it</button>');
+  openModal('Command reference', html, '<button class="btn" onclick="closeModal();showHelp()">Open help</button><button class="btn btn-primary" onclick="closeModal()">Got it</button>');
 }
 
 function closeSearch(){
@@ -138,6 +135,7 @@ function buildCommandResults(raw){
       {cmd:'+proposal', label:'+ New proposal', run:'openProposalForm()'},
       {cmd:'+demo', label:'+ New demo', run:'openDemoForm()'},
       {cmd:'+time', label:'+ Log time', run:'openTimeForm()'},
+      {cmd:'+deploy', label:'+ Log deploy', run:'openDeployForm()'},
       {cmd:'+script', label:'+ New script', run:'addScript(); showView(\'scripts\')'}
     ];
     adds.forEach(function(a){
@@ -152,7 +150,8 @@ function buildCommandResults(raw){
       {cmd:'-invoice', label:'- Delete an invoice', run:'openDeletePicker(\'invoice\')'},
       {cmd:'-proposal', label:'- Delete a proposal', run:'openDeletePicker(\'proposal\')'},
       {cmd:'-demo', label:'- Delete a demo', run:'openDeletePicker(\'demo\')'},
-      {cmd:'-time', label:'- Delete a time entry', run:'openDeletePicker(\'time\')'}
+      {cmd:'-time', label:'- Delete a time entry', run:'openDeletePicker(\'time\')'},
+      {cmd:'-deploy', label:'- Delete a deploy log', run:'openDeletePicker(\'deploy\')'}
     ];
     dels.forEach(function(d){
       if (!rest || d.cmd.indexOf('-'+rest) === 0 || d.label.toLowerCase().indexOf(rest) !== -1) results.push(d);
@@ -168,10 +167,13 @@ function buildCommandResults(raw){
       {cmd:'>proposals', label:'Go to Proposals', run:"showView('proposals')"},
       {cmd:'>invoices', label:'Go to Invoices', run:"showView('invoices')"},
       {cmd:'>demos', label:'Go to Demos', run:"showView('demos')"},
+      {cmd:'>deployments', label:'Go to Deployments', run:"showView('deployments')"},
+      {cmd:'>cf', label:'Go to Deployments', run:"showView('deployments')"},
       {cmd:'>time', label:'Go to Time', run:"showView('time')"},
       {cmd:'>scripts', label:'Go to Scripts', run:"showView('scripts')"},
       {cmd:'>playbook', label:'Go to Playbook', run:"showView('playbook')"},
-      {cmd:'>settings', label:'Go to Settings', run:"showView('settings')"}
+      {cmd:'>settings', label:'Go to Settings', run:"showView('settings')"},
+      {cmd:'>help', label:'Open Help', run:'showHelp()'}
     ];
     navs.forEach(function(n){
       if (!rest || n.cmd.indexOf('>'+rest) === 0 || n.label.toLowerCase().indexOf(rest) !== -1) results.push(n);
@@ -180,6 +182,7 @@ function buildCommandResults(raw){
 
   if (first === '?') {
     results.push({cmd:'?', label:'Command reference', run:'showCommandHelp()'});
+    results.push({cmd:'?help', label:'Section-by-section help', run:'showHelp()'});
   }
 
   if (first === '/') {
@@ -188,6 +191,7 @@ function buildCommandResults(raw){
       {cmd:'/due', label:'Show due items', run:'showView(\'today\')'},
       {cmd:'/overdue', label:'Show overdue invoices', run:'showView(\'invoices\')'},
       {cmd:'/retainer', label:'Show retainer clients', run:'showView(\'clients\')'},
+      {cmd:'/staging', label:'Staging ready to promote', run:'showView(\'today\')'},
       {cmd:'/playbook', label:'Open playbook', run:'showView(\'playbook\')'}
     ];
     filters.forEach(function(f){
@@ -215,7 +219,7 @@ function buildCommandResults(raw){
   return results;
 }
 
-/* --- The new doSearch (overrides app.js version) --- */
+/* --- The command doSearch (overrides app.js version) --- */
 function doSearchCommand(q){
   var res = document.getElementById('searchResults');
   if (!res) return;
@@ -243,13 +247,11 @@ function doSearchCommand(q){
       window._activeCmd = cmds;
       return;
     }
-    // no command match — clear and stop
     res.classList.remove('open');
     window._activeCmd = null;
     return;
   }
 
-  // Normal text search
   window._activeCmd = null;
   if (raw.length < 2) { res.classList.remove('open'); return; }
   var q2 = raw.toLowerCase();
@@ -259,7 +261,7 @@ function doSearchCommand(q){
     if (hay.indexOf(q2) !== -1) hits.push({type:'Lead', title:l.business||l.name, meta:l.stage, action:"showView('leads');setTimeout(function(){openLeadForm('" + l.id + "')},100)"});
   });
   state.clients.forEach(function(c){
-    var hay = ((c.business||'') + ' ' + (c.name||'') + ' ' + (c.industry||'') + ' ' + (c.phone||'') + ' ' + (c.email||'')).toLowerCase();
+    var hay = ((c.business||'') + ' ' + (c.name||'') + ' ' + (c.industry||'') + ' ' + (c.phone||'') + ' ' + (c.email||'') + ' ' + (c.cloudflareProject||'')).toLowerCase();
     if (hay.indexOf(q2) !== -1) hits.push({type:'Client', title:c.business||c.name, meta:c.stage, action:"showView('clients');setTimeout(function(){openClientForm('" + c.id + "')},100)"});
   });
   state.invoices.forEach(function(i){
@@ -282,10 +284,8 @@ function doSearchCommand(q){
   res.classList.add('open');
 }
 
-/* Override the global search */
 window.doSearch = doSearchCommand;
 
-/* Enter key: run first command result */
 document.addEventListener('keydown', function(e){
   if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'searchInput') {
     if (window._activeCmd && window._activeCmd.length) {
@@ -297,7 +297,6 @@ document.addEventListener('keydown', function(e){
   }
 });
 
-/* Update search placeholder to teach commands */
 (function(){
   var inp = document.getElementById('searchInput');
   if (inp) inp.placeholder = 'Search · + add · - delete · > go · / filter · @ source · # stage · ? help';
