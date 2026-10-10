@@ -1,4 +1,4 @@
-/* Studio OS — features: Today, Proposals, bulk import, retainers, JSONBin sync */
+/* Studio OS — features: Today, Proposals, Deployments, Help, bulk import, retainers, JSONBin sync */
 
 /* ===== TODAY VIEW ===== */
 function renderToday(){
@@ -17,6 +17,22 @@ function renderToday(){
 
   var awaiting = state.proposals.filter(function(p){ return p.status === 'Sent' || p.status === 'Viewed'; });
   if (awaiting.length) sections.push({title:'Proposals awaiting reply', items:awaiting.map(function(p){ return {type:'proposal', proposal:p}; })});
+
+  /* Cloudflare: staging ready to promote */
+  var readyToPromote = state.clients.filter(function(c){ return c.stagingUrl && !c.liveUrl; });
+  if (readyToPromote.length) sections.push({title:'Staging ready to promote', items:readyToPromote.map(function(c){ return {type:'promote', client:c}; })});
+
+  /* Cloudflare: failed deploys */
+  var failedDeploys = state.clients.filter(function(c){ return c.lastDeployStatus === 'failed'; });
+  if (failedDeploys.length) sections.push({title:'Deploy failed - check', urgent:true, items:failedDeploys.map(function(c){ return {type:'deploy-failed', client:c}; })});
+
+  /* Cloudflare: analytics missing */
+  var noAnalytics = state.clients.filter(function(c){
+    if (!c.launchDate) return false;
+    if (c.analyticsEnabled) return false;
+    return daysBetween(c.launchDate, now) >= 7;
+  });
+  if (noAnalytics.length) sections.push({title:'Analytics not installed (7+ days live)', items:noAnalytics.map(function(c){ return {type:'analytics-missing', client:c}; })});
 
   var thisMonth = now.slice(0,7);
   var retainersDue = [];
@@ -46,6 +62,11 @@ function renderToday(){
   var oldDemos = state.demos.filter(function(d){ return d.createdAt && daysBetween(d.createdAt, now) > 60; });
   if (oldDemos.length) sections.push({title:'Demos to clean up', items:oldDemos.map(function(d){ return {type:'demo', demo:d}; })});
 
+  /* Backup nag */
+  if (state.ui.lastBackup && daysBetween(state.ui.lastBackup, now) >= 14){
+    sections.unshift({title:'Backup overdue', urgent:true, items:[{type:'backup'}]});
+  }
+
   if (sections.length === 0) el.innerHTML = '<div class="empty" style="padding:48px 20px">Nothing needs you right now.</div>';
   else el.innerHTML = sections.map(function(sec){
     return '<div class="today-section' + (sec.urgent?' urgent':'') + '"><h2>' + esc(sec.title) + '<span class="count">' + sec.items.length + '</span></h2>' + sec.items.map(renderTodayItem).join('') + '</div>';
@@ -63,6 +84,7 @@ function renderTodayItem(item){
     if (l.phone) actions += '<button onclick="event.stopPropagation();outreachText(\'' + l.id + '\')">SMS</button>';
     if (l.email) actions += '<button onclick="event.stopPropagation();outreachEmail(\'' + l.id + '\')">Mail</button>';
     if (l.phone) actions += '<button onclick="event.stopPropagation();outreachWhatsApp(\'' + l.id + '\')">WA</button>';
+    if (l.demoUrl) actions += '<button onclick="event.stopPropagation();openExternal(\'' + jsStr(l.demoUrl) + '\')">↗ Demo</button>';
     return '<div class="today-item" onclick="openLeadForm(\'' + l.id + '\')"><div class="ti-main"><div class="ti-title">' + esc(l.business||l.name) + '</div><div class="ti-meta">' + esc(l.nextActionNote||l.stage||'') + (l.city ? ' - ' + esc(l.city) : '') + '</div></div>' + tag + '<div class="ti-actions">' + actions + '</div></div>';
   }
   if (item.type === 'invoice'){
@@ -83,7 +105,23 @@ function renderTodayItem(item){
   }
   if (item.type === 'demo'){
     var d = item.demo;
-    return '<div class="today-item" onclick="showView(\'demos\')"><div class="ti-main"><div class="ti-title">' + esc(d.business) + '</div><div class="ti-meta">Deployed ' + esc(d.createdAt) + '</div></div><span class="ti-tag warn">Cleanup</span></div>';
+    var demoU = normalizeUrl(d.url);
+    return '<div class="today-item"><div class="ti-main" onclick="showView(\'demos\')"><div class="ti-title">' + esc(d.business) + '</div><div class="ti-meta">Deployed ' + esc(d.createdAt) + '</div></div><span class="ti-tag warn">Cleanup</span><div class="ti-actions"><button onclick="event.stopPropagation();openExternal(\'' + jsStr(demoU) + '\')">↗ Open</button></div></div>';
+  }
+  if (item.type === 'promote'){
+    var pc = item.client;
+    return '<div class="today-item" onclick="openClientForm(\'' + pc.id + '\')"><div class="ti-main"><div class="ti-title">' + esc(pc.business||pc.name) + '</div><div class="ti-meta">Staging: ' + esc(pc.stagingUrl) + '</div></div><span class="ti-tag info">Promote</span><div class="ti-actions"><button onclick="event.stopPropagation();openExternal(\'' + jsStr(pc.stagingUrl) + '\')">↗ Staging</button></div></div>';
+  }
+  if (item.type === 'deploy-failed'){
+    var fc = item.client;
+    return '<div class="today-item" onclick="openClientForm(\'' + fc.id + '\')"><div class="ti-main"><div class="ti-title">' + esc(fc.business||fc.name) + '</div><div class="ti-meta">Last deploy failed</div></div><span class="ti-tag danger">Failed</span></div>';
+  }
+  if (item.type === 'analytics-missing'){
+    var ac = item.client;
+    return '<div class="today-item" onclick="openClientForm(\'' + ac.id + '\')"><div class="ti-main"><div class="ti-title">' + esc(ac.business||ac.name) + '</div><div class="ti-meta">Live since ' + esc(ac.launchDate) + ' - no analytics</div></div><span class="ti-tag warn">Analytics</span></div>';
+  }
+  if (item.type === 'backup'){
+    return '<div class="today-item" onclick="exportBackup()"><div class="ti-main"><div class="ti-title">Export a JSON backup now</div><div class="ti-meta">Last backup: ' + esc(state.ui.lastBackup||'never') + '</div></div><span class="ti-tag danger">Overdue</span><div class="ti-actions"><button onclick="event.stopPropagation();exportBackup()">Export</button></div></div>';
   }
   return '';
 }
@@ -104,6 +142,59 @@ function updateBadges(){
   var b = document.getElementById('todayCount'); if (b) b.textContent = count;
   var pb = document.getElementById('proposalCount');
   if (pb) pb.textContent = state.proposals.filter(function(p){ return p.status === 'Sent' || p.status === 'Viewed'; }).length;
+  var db = document.getElementById('deployCount');
+  if (db) db.textContent = (state.deploys||[]).length;
+}
+
+/* ===== DEPLOYMENTS VIEW ===== */
+function renderDeployments(){
+  var el = document.getElementById('deploymentsList'); if (!el) return;
+  var selectEl = document.getElementById('deployFilterClient');
+  if (selectEl){
+    var cur = selectEl.value;
+    var opts = '<option value="">All clients</option>' + state.clients.map(function(c){
+      return '<option value="' + c.id + '" ' + (cur===c.id?'selected':'') + '>' + esc(c.business||c.name) + '</option>';
+    }).join('');
+    selectEl.innerHTML = opts;
+  }
+  var filterId = selectEl ? selectEl.value : '';
+  var rows = (state.deploys || []).slice();
+  if (filterId) rows = rows.filter(function(d){ return d.clientId === filterId; });
+  if (rows.length === 0) { el.innerHTML = '<div class="empty">No deploys logged yet.</div>'; return; }
+  el.innerHTML = '<table class="tbl"><thead><tr><th>Date</th><th>Client</th><th>Target</th><th>Status</th><th>Note</th><th></th></tr></thead><tbody>' + rows.map(function(d){
+    return '<tr><td>' + esc(d.date) + '</td><td>' + esc(d.clientName||'-') + '</td><td><span class="pill ' + (d.target==='live'?'ok':'') + '">' + esc(d.target) + '</span></td><td>' + (d.status==='ok'?'<span class="pill ok">OK</span>':d.status==='failed'?'<span class="pill danger">Failed</span>':'<span class="pill warn">Pending</span>') + '</td><td>' + esc(d.note||'') + '</td><td class="acts"><button class="btn btn-sm" onclick="deleteDeploy(\'' + d.id + '\')">Delete</button></td></tr>';
+  }).join('') + '</tbody></table>';
+}
+function deleteDeploy(id){
+  if (!confirm('Delete this deploy log entry?')) return;
+  state.deploys = (state.deploys||[]).filter(function(d){ return d.id !== id; });
+  saveState(); renderAll(); toast('Deleted','warn');
+}
+
+/* ===== HELP SYSTEM ===== */
+function showHelp(which){
+  closeSearch();
+  var html = '<div style="max-height:60vh;overflow-y:auto">';
+  if (which){
+    var sec = null;
+    for (var i=0;i<HELP_SECTIONS.length;i++) if (HELP_SECTIONS[i].id === which) sec = HELP_SECTIONS[i];
+    if (sec){
+      html += '<h3 style="font-family:var(--display);margin-bottom:8px">' + esc(sec.title) + '</h3>';
+      html += '<p style="font-size:12px;line-height:1.7;white-space:pre-wrap">' + esc(sec.body) + '</p>';
+    } else html += '<div class="empty">No help for that section.</div>';
+  } else {
+    html += '<p style="font-size:12px;margin-bottom:14px">Quick tour of every section. Click one for details.</p>';
+    html += '<div style="display:flex;flex-direction:column;gap:6px">';
+    HELP_SECTIONS.forEach(function(s){
+      html += '<button class="btn btn-sm" style="text-align:left;justify-content:flex-start;width:100%" onclick="closeModal();showHelp(\'' + s.id + '\')">' + esc(s.title) + '</button>';
+    });
+    html += '</div>';
+    html += '<p style="font-size:11px;color:var(--muted);margin-top:16px;line-height:1.7"><strong>Tip:</strong> Press <code>/</code> or <code>Ctrl+K</code> anywhere to search. Type <code>?</code> in the search bar for the command list.</p>';
+  }
+  html += '</div>';
+  var foot = '<button class="btn btn-ghost" onclick="closeModal();showHelp()">Back to index</button><button class="btn btn-primary" onclick="closeModal()">Close</button>';
+  if (!which) foot = '<button class="btn btn-primary" onclick="closeModal()">Got it</button>';
+  openModal(which ? 'Help' : 'Studio OS Help', html, foot);
 }
 
 /* ===== PROPOSALS ===== */
@@ -203,7 +294,13 @@ function deleteProposal(id){ if (!confirm('Delete this proposal?')) return; stat
 function printProposal(id){
   var p = findById(state.proposals, id); if (!p) return;
   var s = state.settings;
-  var html = '<html><head><title>Proposal - ' + esc(p.business) + '</title><style>body{font-family:"Courier New",monospace;padding:40px;max-width:700px;margin:0 auto;color:#000;line-height:1.7}h1{font-family:Arial;font-size:24px;margin:0 0 4px}h3{font-family:Arial;font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin:20px 0 8px}.muted{color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.1em}.price{font-family:Arial;font-size:22px;color:#ff3300;font-weight:bold}@media print{body{padding:20px}}</style></head><body><h1>PROPOSAL</h1><div class="muted" style="margin-bottom:24px">' + esc(s.brand||'Studio') + ' - ' + esc(today()) + '</div><h3>Client</h3><div>' + esc(p.business) + '</div><h3>Scope</h3><div>' + (esc(p.scope) || 'Custom website - 6 pages, responsive.') + '</div><h3>Package</h3><div>' + esc(p.package) + '</div><h3>Price</h3><div class="price">' + fmt$(p.amount) + '</div><h3>Terms</h3><div style="white-space:pre-wrap;font-size:12px">' + esc(s.terms) + '</div><h3>Payment</h3><div style="font-size:12px">' + s.depositPct + '% deposit to begin. Balance due at launch.</div><h3>Sign-off</h3><div style="margin-top:30px;font-size:12px">Client: __________________________ Date: __________</div><div style="margin-top:20px;font-size:12px">You: __________________________ Date: __________</div></body></html>';
+  var clientStaging = '';
+  if (p.leadId){
+    var l = findById(state.leads, p.leadId);
+    if (l && l.demoUrl) clientStaging = normalizeUrl(l.demoUrl);
+  }
+  var previewBlock = clientStaging ? '<h3>Preview</h3><div style="font-size:12px">' + esc(clientStaging) + '</div>' : '';
+  var html = '<html><head><title>Proposal - ' + esc(p.business) + '</title><style>body{font-family:"Courier New",monospace;padding:40px;max-width:700px;margin:0 auto;color:#000;line-height:1.7}h1{font-family:Arial;font-size:24px;margin:0 0 4px}h3{font-family:Arial;font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin:20px 0 8px}.muted{color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.1em}.price{font-family:Arial;font-size:22px;color:#ff3300;font-weight:bold}@media print{body{padding:20px}}</style></head><body><h1>PROPOSAL</h1><div class="muted" style="margin-bottom:24px">' + esc(s.brand||'Studio') + ' - ' + esc(today()) + '</div><h3>Client</h3><div>' + esc(p.business) + '</div>' + previewBlock + '<h3>Scope</h3><div>' + (esc(p.scope) || 'Custom website - 6 pages, responsive.') + '</div><h3>Package</h3><div>' + esc(p.package) + '</div><h3>Price</h3><div class="price">' + fmt$(p.amount) + '</div><h3>Terms</h3><div style="white-space:pre-wrap;font-size:12px">' + esc(s.terms) + '</div><h3>Payment</h3><div style="font-size:12px">' + s.depositPct + '% deposit to begin. Balance due at launch.</div><h3>Sign-off</h3><div style="margin-top:30px;font-size:12px">Client: __________________________ Date: __________</div><div style="margin-top:20px;font-size:12px">You: __________________________ Date: __________</div></body></html>';
   var w = window.open('', '_blank'); w.document.write(html); w.document.close();
   setTimeout(function(){ w.print(); }, 400);
 }
@@ -223,7 +320,7 @@ function confirmLeadLost(id){
 
 /* ===== BULK IMPORT ===== */
 function openBulkImport(){
-  var html = '<p style="font-size:12px;margin-bottom:12px">One business per line.<br>Format: <code style="background:var(--bg);padding:2px 6px">Business, Phone, City, Industry</code></p>' +
+  var html = '<p style="font-size:12px;margin-bottom:12px">One business per line. Fields separated by comma or tab.<br>Format: <code style="background:var(--bg);padding:2px 6px">Business, Phone, City, Industry, DemoURL, Email</code> - last two optional.</p>' +
     '<div class="field"><label>Paste</label><textarea id="f_bulk" style="min-height:200px;font-family:var(--mono);font-size:12px"></textarea></div>' +
     '<div class="field"><label>Source</label><select id="f_bulkSource"><option>Google Maps</option><option>Facebook</option><option>Walk-in</option><option>Referral</option><option>Other</option></select></div>' +
     '<div class="field-row"><div class="field"><label>Default city</label><input id="f_defaultCity" placeholder="Miami"></div><div class="field"><label>Default stage</label><select id="f_defaultStage">' + STAGES.map(function(x){ return '<option>' + x + '</option>'; }).join('') + '</select></div></div>';
@@ -241,7 +338,21 @@ function confirmBulkImport(){
   lines.forEach(function(line){
     var parts = line.split(/\t|,(?![^(]*\))/).map(function(p){ return p.trim(); });
     var business = parts[0]; if (!business) return;
-    state.leads.unshift({id:uid(), business:business, name:'', industry:parts[3]||'business', city:parts[2]||defaultCity, phone:parts[1]||'', email:'', source:source, value:state.settings.priceStd, stage:defaultStage, demoUrl:'', nextActionDate:'', nextActionNote:'', notes:'Imported ' + today(), createdAt:today(), lastContact:today(), log:[{date:today(), type:'note', text:'Imported'}]});
+    state.leads.unshift({
+      id:uid(), business:business, name:'',
+      industry:parts[3]||'business',
+      city:parts[2]||defaultCity,
+      phone:parts[1]||'',
+      email:parts[5]||'',
+      demoUrl:parts[4]||'',
+      source:source,
+      value:state.settings.priceStd,
+      stage:defaultStage,
+      nextActionDate:'', nextActionNote:'',
+      notes:'Imported ' + today(),
+      createdAt:today(), lastContact:today(),
+      log:[{date:today(), type:'note', text:'Imported'}]
+    });
     added++;
   });
   saveState(); closeModal(); renderAll(); toast('Imported ' + added,'ok');
@@ -265,11 +376,7 @@ function runRecurringRetainers(){
   if (created > 0) { saveState(); toast(created + ' retainer invoice' + (created>1?'s':'') + ' created','ok'); }
 }
 
-/* ===== JSONBIN SYNC =====
-   Uses JSONBin.io free tier. Get a master key at jsonbin.io after free signup
-   (email only, no verification required). The bin is created automatically on
-   first Enable; copy the bin ID to your second device to share the same bin.
-*/
+/* ===== JSONBIN SYNC ===== */
 var syncTimer = null, syncPoll = null;
 var JSONBIN_API = 'https://api.jsonbin.io/v3/b';
 
@@ -290,7 +397,6 @@ function enableSync(){
   var binId = (state.settings.syncCode || '').trim();
   if (!key) { toast('Paste your JSONBin Master Key first','warn'); return; }
   if (!binId) { createNewBin(key); return; }
-  // Bin exists — connect
   syncEnabled = true;
   startPoll();
   syncNow(true);
@@ -397,7 +503,6 @@ function initSync(){
   }
 }
 
-/* Relabel the sync fields for JSONBin (works without touching index.html) */
 function relabelSyncUI(){
   var urlInput = document.getElementById('setSyncUrl');
   var codeInput = document.getElementById('setSyncCode');
@@ -426,6 +531,9 @@ window.renderToday = renderToday;
 window.renderTodayItem = renderTodayItem;
 window.markCheckin = markCheckin;
 window.updateBadges = updateBadges;
+window.renderDeployments = renderDeployments;
+window.deleteDeploy = deleteDeploy;
+window.showHelp = showHelp;
 window.renderProposals = renderProposals;
 window.openProposalForm = openProposalForm;
 window.saveProposal = saveProposal;
@@ -447,6 +555,5 @@ window.scheduleSync = scheduleSync;
 window.initSync = initSync;
 window.relabelSyncUI = relabelSyncUI;
 
-// Relabel as soon as the settings panel exists
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', relabelSyncUI);
 else relabelSyncUI();
