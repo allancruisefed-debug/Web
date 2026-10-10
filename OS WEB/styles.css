@@ -54,6 +54,7 @@ h1{font-size:22px}h2{font-size:16px;text-transform:uppercase;letter-spacing:.02e
 .kcard .biz{font-weight:600;margin-bottom:2px}
 .kcard .meta{font-size:10px;color:var(--muted)}
 .kcard .tags{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.kcard-url{margin-top:6px}
 .kcard-actions{display:flex;gap:4px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line-soft)}
 .kact{flex:1;padding:4px 6px;border:1.5px solid var(--line);background:var(--bg);font-family:var(--mono);font-size:10px;font-weight:600;cursor:pointer;text-transform:uppercase}
 .kact:hover{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
@@ -117,6 +118,7 @@ h1{font-size:22px}h2{font-size:16px;text-transform:uppercase;letter-spacing:.02e
 .sr-item{padding:10px 12px;border-bottom:1px solid var(--line-soft);cursor:pointer;font-size:11px}
 .sr-item:last-child{border-bottom:none}
 .sr-item:hover{background:var(--bg)}
+.sr-item.active{background:var(--bg)}
 .sr-item .t{font-weight:600;margin-bottom:2px}
 .sr-item .m{font-size:10px;color:var(--muted)}
 .row{display:flex;gap:8px;align-items:center}
@@ -178,6 +180,23 @@ h1{font-size:22px}h2{font-size:16px;text-transform:uppercase;letter-spacing:.02e
 .prop-status.Viewed{background:var(--warn);color:#000;border-color:var(--warn)}
 .prop-status.Accepted{background:var(--ok);color:#fff;border-color:var(--ok)}
 .prop-status.Declined{background:var(--danger);color:#fff;border-color:var(--danger)}
+
+/* URL CHIPS — clickable links with copy + open */
+.url-chip{display:inline-flex;align-items:center;gap:0;border:1.5px solid var(--line);background:var(--bg);font-size:10px;font-family:var(--mono);max-width:100%;overflow:hidden}
+.url-chip .url-text{padding:3px 8px;cursor:pointer;color:var(--info);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
+.url-chip .url-text:hover{background:var(--info);color:#fff;text-decoration:none}
+.url-chip .url-btn{padding:3px 6px;border:none;border-left:1px solid var(--line);background:var(--bg-alt);font-size:10px;cursor:pointer;color:var(--ink)}
+.url-chip .url-btn:hover{background:var(--accent);color:var(--accent-ink)}
+.url-chip.small{font-size:9px}
+.url-chip.small .url-text{padding:2px 6px;max-width:120px}
+
+/* CLIENT ACTIONS POPOVER */
+.popover{background:var(--bg-alt);border:2px solid var(--line);box-shadow:4px 4px 0 var(--line);min-width:220px;z-index:800;display:flex;flex-direction:column;padding:4px}
+.pop-item{padding:8px 12px;font-size:11px;text-align:left;border:none;background:none;cursor:pointer;font-family:var(--mono);color:var(--ink)}
+.pop-item:hover{background:var(--accent);color:var(--accent-ink)}
+.pop-item.muted{color:var(--muted);cursor:default}
+.pop-item.muted:hover{background:none;color:var(--muted)}
+
 @media(max-width:900px){
 .app{grid-template-columns:1fr}
 .sidebar{position:static;height:auto;border-right:none;border-bottom:2px solid var(--line)}
