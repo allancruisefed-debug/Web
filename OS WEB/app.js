@@ -4,9 +4,58 @@ var STORE_KEY = 'studio-os-v7';
 var state;
 var syncEnabled = false;
 
+/* ===== URL + CLIPBOARD HELPERS ===== */
+function normalizeUrl(url){
+  if (!url) return '';
+  var u = String(url).trim();
+  if (!u) return '';
+  if (/^(https?:|mailto:|tel:|sms:)/i.test(u)) return u;
+  return 'https://' + u;
+}
+function openExternal(url){
+  var u = normalizeUrl(url);
+  if (!u) { toast('No URL set','warn'); return; }
+  window.open(u, '_blank', 'noopener,noreferrer');
+}
+function copyText(text, label){
+  var t = String(text||'').trim();
+  if (!t) { toast('Nothing to copy','warn'); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(function(){ toast((label||'Link') + ' copied','ok'); })
+      .catch(function(){ fallbackCopy(t,label); });
+  } else fallbackCopy(t,label);
+}
+function fallbackCopy(t,label){
+  var ta = document.createElement('textarea');
+  ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); toast((label||'Link')+' copied','ok'); }
+  catch(e){ toast('Copy failed','warn'); }
+  document.body.removeChild(ta);
+}
+function handleUrlClick(el){ openExternal(el.getAttribute('data-url')); }
+function handleCopyClick(el){ copyText(el.getAttribute('data-copy'), el.getAttribute('data-label') || 'Link'); }
+function urlChip(url, label, cls){
+  var u = normalizeUrl(url);
+  if (!u) return '';
+  var display = label || String(url).replace(/^https?:\/\//i,'').replace(/\/$/,'');
+  return '<span class="url-chip ' + (cls||'') + '" title="' + esc(u) + '">' +
+    '<span class="url-text" onclick="event.stopPropagation();handleUrlClick(this.parentElement)" data-url="' + esc(u) + '">' + esc(display) + '</span>' +
+    '<button class="url-btn" title="Copy" onclick="event.stopPropagation();handleCopyClick(this.parentElement)" data-copy="' + esc(u) + '" data-label="' + esc(label||'Link') + '">⧉</button>' +
+    '<button class="url-btn" title="Open" onclick="event.stopPropagation();handleUrlClick(this.parentElement)" data-url="' + esc(u) + '">↗</button>' +
+    '</span>';
+}
+function phoneDigits(p){ return String(p||'').replace(/[^\d]/g,''); }
+function waNumber(p){
+  var d = phoneDigits(p);
+  if (!d) return '';
+  return d;
+}
+
 function defaultState(){
   return {
     leads: [], clients: [], invoices: [], demos: [], proposals: [], timeEntries: [], lostDeals: [],
+    deploys: [],
     scripts: JSON.parse(JSON.stringify(DEFAULT_SCRIPTS)),
     outreach: JSON.parse(JSON.stringify(DEFAULT_OUTREACH)),
     ui: { theme:'light', view:'today', lastBackup: today(), lastSync: null },
@@ -50,6 +99,7 @@ function uid(){ return Math.random().toString(36).slice(2,10); }
 function today(){ return new Date().toISOString().slice(0,10); }
 function fmt$(n){ n = Number(n)||0; return '$' + n.toLocaleString('en-US',{maximumFractionDigits:0}); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+function jsStr(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,''); }
 function daysBetween(a,b){ return Math.floor((new Date(b) - new Date(a)) / 86400000); }
 function addDays(d,n){ var t = new Date(d); t.setDate(t.getDate()+n); return t.toISOString().slice(0,10); }
 function findById(arr,id){ if (!arr) return null; for (var i=0;i<arr.length;i++) if (arr[i].id===id) return arr[i]; return null; }
@@ -85,6 +135,80 @@ function openModal(title, body, foot){
   $('modalBack').classList.add('open');
 }
 function closeModal(){ $('modalBack').classList.remove('open'); }
+
+/* ===== CLIENT ACTIONS POPOVER ===== */
+function openClientActions(e, id){
+  e.stopPropagation();
+  closeClientActions();
+  var c = findById(state.clients, id); if (!c) return;
+  var pop = document.createElement('div');
+  pop.className = 'popover'; pop.id = 'clientPopover';
+  var rows = [];
+  if (c.stagingUrl) {
+    rows.push('<button class="pop-item" onclick="closeClientActions();openExternal(\'' + jsStr(c.stagingUrl) + '\')">↗ Open staging</button>');
+    rows.push('<button class="pop-item" onclick="closeClientActions();copyText(\'' + jsStr(c.stagingUrl) + '\',\'Staging URL\')">⧉ Copy staging URL</button>');
+  }
+  if (c.liveUrl) {
+    rows.push('<button class="pop-item" onclick="closeClientActions();openExternal(\'' + jsStr(c.liveUrl) + '\')">↗ Open live site</button>');
+    rows.push('<button class="pop-item" onclick="closeClientActions();copyText(\'' + jsStr(c.liveUrl) + '\',\'Live URL\')">⧉ Copy live URL</button>');
+  }
+  if (c.cloudflareProject){
+    var cfUrl = 'https://dash.cloudflare.com/?to=/:account/pages/view/' + encodeURIComponent(c.cloudflareProject);
+    rows.push('<button class="pop-item" onclick="closeClientActions();openExternal(\'' + jsStr(cfUrl) + '\')">☁ Open Cloudflare project</button>');
+  }
+  rows.push('<button class="pop-item" onclick="closeClientActions();openDeployForm(\'' + c.id + '\')">⇪ Log deploy</button>');
+  rows.push('<button class="pop-item" onclick="closeClientActions();generateInvoice(\'' + c.id + '\',\'Deposit\')">$ Deposit invoice</button>');
+  rows.push('<button class="pop-item" onclick="closeClientActions();generateInvoice(\'' + c.id + '\',\'Final\')">$ Final invoice</button>');
+  rows.push('<button class="pop-item" onclick="closeClientActions();openTimeForm(\'' + c.id + '\')">⏱ Log time</button>');
+  rows.push('<button class="pop-item" onclick="closeClientActions();openClientForm(\'' + c.id + '\')">✎ Open full record</button>');
+  if (!rows.length) rows.push('<div class="pop-item muted">No actions available</div>');
+  pop.innerHTML = rows.join('');
+  document.body.appendChild(pop);
+  var r = e.currentTarget.getBoundingClientRect();
+  var popW = 240;
+  pop.style.position = 'fixed';
+  pop.style.top = (r.bottom + 6) + 'px';
+  pop.style.left = Math.max(8, Math.min(r.right - popW, window.innerWidth - popW - 8)) + 'px';
+  setTimeout(function(){ document.addEventListener('click', closeClientActions, {once:true}); }, 0);
+}
+function closeClientActions(){
+  var p = document.getElementById('clientPopover');
+  if (p) p.remove();
+}
+
+/* ===== DEPLOY LOG ===== */
+function addDeploy(clientId, target, status, note){
+  if (!state.deploys) state.deploys = [];
+  var c = clientId ? findById(state.clients, clientId) : null;
+  state.deploys.unshift({
+    id: uid(),
+    clientId: clientId || null,
+    clientName: c ? (c.business || c.name) : '',
+    target: target || 'staging',
+    status: status || 'ok',
+    date: today(),
+    note: note || ''
+  });
+  if (c){
+    c.lastDeployStatus = status || 'ok';
+    if (target === 'live' && status === 'ok' && !c.launchDate) c.launchDate = today();
+  }
+  saveState();
+}
+function openDeployForm(clientId){
+  var clientOpts = '<option value="">(none)</option>' + state.clients.map(function(c){
+    return '<option value="' + c.id + '" ' + (clientId===c.id?'selected':'') + '>' + esc(c.business||c.name) + '</option>';
+  }).join('');
+  var html = '<div class="field"><label>Client</label><select id="f_clientId">' + clientOpts + '</select></div>' +
+    '<div class="field-row"><div class="field"><label>Target</label><select id="f_target"><option value="staging">Staging</option><option value="live">Live</option></select></div>' +
+    '<div class="field"><label>Status</label><select id="f_status"><option value="ok">OK</option><option value="failed">Failed</option><option value="pending">Pending</option></select></div></div>' +
+    '<div class="field"><label>Note</label><input id="f_note" placeholder="What changed?"></div>';
+  openModal('Log deploy', html, '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveDeploy()">Save</button>');
+}
+function saveDeploy(){
+  addDeploy(val('f_clientId') || null, val('f_target'), val('f_status'), val('f_note'));
+  closeModal(); renderAll(); toast('Deploy logged','ok');
+}
 
 /* ===== DASHBOARD ===== */
 function renderDashboard(){
@@ -150,6 +274,7 @@ function renderDashboard(){
   });
   state.invoices.forEach(function(i){ if (i.status==='Pending') att.push({type:'', text:'Invoice pending ' + fmt$(i.amount) + ' - ' + esc(i.clientName||''), action:"showView('invoices')"}); });
   state.clients.forEach(function(c){ if (c.stage==='Content' && !c.contentReceived) att.push({type:'warn', text:'Awaiting content - ' + esc(c.business||c.name), action:"showView('clients')"}); });
+  state.clients.forEach(function(c){ if (c.stagingUrl && !c.liveUrl) att.push({type:'info', text:'Staging ready to promote - ' + esc(c.business||c.name), action:"openClientForm('" + c.id + "')"}); });
   if (state.ui.lastBackup && daysBetween(state.ui.lastBackup, now) >= 7) att.unshift({type:'danger', text:'Backup overdue - click to export', action:'exportBackup()'});
   var attEl = $('attentionList');
   if (attEl) {
@@ -160,6 +285,7 @@ function renderDashboard(){
   var recent = [];
   state.leads.forEach(function(l){ (l.log||[]).forEach(function(ev){ recent.push({date:ev.date, text:ev.text, who:l.business||l.name, kind:'Lead'}); }); });
   state.clients.forEach(function(c){ (c.log||[]).forEach(function(ev){ recent.push({date:ev.date, text:ev.text, who:c.business||c.name, kind:'Client'}); }); });
+  (state.deploys||[]).forEach(function(d){ recent.push({date:d.date, text:'Deployed to ' + d.target + ' (' + d.status + ')' + (d.note?' - '+d.note:''), who:d.clientName||'', kind:'Deploy'}); });
   recent.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
   var recEl = $('recentActivity');
   if (recEl) {
@@ -227,22 +353,32 @@ function leadCard(l){
   if (overdue) tags += '<span class="tag danger">DUE ' + l.nextActionDate + '</span>';
   else if (due) tags += '<span class="tag info">DUE ' + l.nextActionDate + '</span>';
   if (stale && !due) tags += '<span class="tag warn">STALE ' + daysBetween(l.lastContact, now) + 'd</span>';
-  if (l.demoUrl) tags += '<span class="tag ok">DEMO</span>';
   var outreach = '';
   if (l.email) outreach += '<button class="kact" onclick="event.stopPropagation();outreachEmail(\'' + l.id + '\')">Mail</button>';
   if (l.phone) outreach += '<button class="kact" onclick="event.stopPropagation();outreachText(\'' + l.id + '\')">SMS</button>';
   if (l.phone) outreach += '<button class="kact" onclick="event.stopPropagation();outreachWhatsApp(\'' + l.id + '\')">WA</button>';
-  return '<div class="kcard" onclick="openLeadForm(\'' + l.id + '\')"><div class="biz">' + esc(l.business || l.name || 'Untitled') + '</div><div class="meta">' + esc(l.industry||'') + (l.city ? ' - ' + esc(l.city) : '') + '</div>' + (l.nextActionNote ? '<div class="meta" style="margin-top:4px">' + esc(l.nextActionNote) + '</div>' : '') + '<div class="tags">' + tags + '</div>' + (outreach ? '<div class="kcard-actions">' + outreach + '</div>' : '') + '</div>';
+  var demoChip = '';
+  if (l.demoUrl){
+    var u = normalizeUrl(l.demoUrl);
+    demoChip = '<div class="kcard-url"><span class="url-chip" title="' + esc(u) + '">' +
+      '<span class="url-text" data-url="' + esc(u) + '" onclick="event.stopPropagation();handleUrlClick(this.parentElement)">Demo preview</span>' +
+      '<button class="url-btn" title="Copy" data-copy="' + esc(u) + '" data-label="Demo URL" onclick="event.stopPropagation();handleCopyClick(this.parentElement)">⧉</button>' +
+      '<button class="url-btn" title="Open" data-url="' + esc(u) + '" onclick="event.stopPropagation();handleUrlClick(this.parentElement)">↗</button>' +
+      '</span></div>';
+  }
+  return '<div class="kcard" onclick="openLeadForm(\'' + l.id + '\')"><div class="biz">' + esc(l.business || l.name || 'Untitled') + '</div><div class="meta">' + esc(l.industry||'') + (l.city ? ' - ' + esc(l.city) : '') + '</div>' + (l.nextActionNote ? '<div class="meta" style="margin-top:4px">' + esc(l.nextActionNote) + '</div>' : '') + '<div class="tags">' + tags + '</div>' + demoChip + (outreach ? '<div class="kcard-actions">' + outreach + '</div>' : '') + '</div>';
 }
 
 function openLeadForm(id){
   var lead = id ? findById(state.leads, id) : null;
+  var demoUrl = lead && lead.demoUrl ? normalizeUrl(lead.demoUrl) : '';
   var html =
     '<div class="field-row"><div class="field"><label>Business name</label><input id="f_business" value="' + esc(lead?lead.business:'') + '"></div><div class="field"><label>Owner / contact</label><input id="f_name" value="' + esc(lead?lead.name:'') + '"></div></div>' +
     '<div class="field-row"><div class="field"><label>Industry</label><input id="f_industry" value="' + esc(lead?lead.industry:'') + '"></div><div class="field"><label>City</label><input id="f_city" value="' + esc(lead?lead.city:'') + '"></div></div>' +
     '<div class="field-row"><div class="field"><label>Phone</label><input id="f_phone" value="' + esc(lead?lead.phone:'') + '"></div><div class="field"><label>Email</label><input id="f_email" value="' + esc(lead?lead.email:'') + '"></div></div>' +
     '<div class="field-row"><div class="field"><label>Source</label><select id="f_source">' + ['Google Maps','Facebook','Walk-in','Referral','Cold email','LinkedIn','Other'].map(function(s){ return '<option ' + (lead&&lead.source===s?'selected':'') + '>' + s + '</option>'; }).join('') + '</select></div><div class="field"><label>Estimated value ($)</label><input type="number" id="f_value" value="' + ((lead&&lead.value) || state.settings.priceStd) + '"></div></div>' +
-    '<div class="field-row"><div class="field"><label>Stage</label><select id="f_stage">' + STAGES.map(function(s){ return '<option ' + (lead&&lead.stage===s?'selected':'') + '>' + s + '</option>'; }).join('') + '</select></div><div class="field"><label>Demo URL</label><input id="f_demoUrl" value="' + esc(lead?lead.demoUrl:'') + '"></div></div>' +
+    '<div class="field-row"><div class="field"><label>Stage</label><select id="f_stage">' + STAGES.map(function(s){ return '<option ' + (lead&&lead.stage===s?'selected':'') + '>' + s + '</option>'; }).join('') + '</select></div><div class="field"><label>Demo URL</label><input id="f_demoUrl" placeholder="demo-roofing.pages.dev" value="' + esc(lead?lead.demoUrl:'') + '"></div></div>' +
+    (demoUrl ? '<div class="field" style="margin-top:-6px"><div class="row">' + urlChip(demoUrl,'Demo preview') + '</div></div>' : '') +
     '<div class="field-row"><div class="field"><label>Next action date</label><input type="date" id="f_nextActionDate" value="' + esc(lead?lead.nextActionDate:'') + '"></div><div class="field"><label>Next action note</label><input id="f_nextActionNote" value="' + esc(lead?lead.nextActionNote:'') + '"></div></div>' +
     '<div class="field"><label>Notes</label><textarea id="f_notes">' + esc(lead?lead.notes:'') + '</textarea></div>';
 
@@ -251,6 +387,8 @@ function openLeadForm(id){
     if (lead.email) html += '<button class="btn btn-sm" onclick="outreachEmail(\'' + lead.id + '\');closeModal()">Email</button>';
     if (lead.phone) html += '<button class="btn btn-sm" onclick="outreachText(\'' + lead.id + '\');closeModal()">Text</button>';
     if (lead.phone) html += '<button class="btn btn-sm" onclick="outreachWhatsApp(\'' + lead.id + '\');closeModal()">WhatsApp</button>';
+    if (lead.phone) html += '<button class="btn btn-sm" onclick="copyText(\'' + jsStr(lead.phone) + '\',\'Phone\')">Copy phone</button>';
+    if (lead.email) html += '<button class="btn btn-sm" onclick="copyText(\'' + jsStr(lead.email) + '\',\'Email\')">Copy email</button>';
     html += '</div>';
     html += '<div class="panel-head mt"><h2>Activity log</h2></div><div class="timeline">';
     var log = (lead.log||[]).slice().reverse();
@@ -317,7 +455,18 @@ function addLog(id){
 function convertLeadToClient(leadId){
   var l = findById(state.leads, leadId); if (!l) return;
   if (!confirm('Convert to client?')) return;
-  var c = {id:uid(), business:l.business, name:l.name, phone:l.phone, email:l.email, industry:l.industry, city:l.city, package:'Standard', price:l.value || state.settings.priceStd, stage:'Content', launchDate:'', contentReceived:false, retainer:false, retainerAmount:state.settings.retainer, retainerBillingDay:state.settings.retainerBillingDay||1, liveUrl:l.demoUrl||'', notes:l.notes, checklist:{}, checkins:{}, feedback:{}, createdAt:today(), log:(l.log||[]).slice()};
+  var c = {
+    id:uid(), business:l.business, name:l.name, phone:l.phone, email:l.email,
+    industry:l.industry, city:l.city, package:'Standard', price:l.value || state.settings.priceStd,
+    stage:'Content', launchDate:'', contentReceived:false,
+    retainer:false, retainerAmount:state.settings.retainer,
+    retainerBillingDay:state.settings.retainerBillingDay||1,
+    liveUrl:'', stagingUrl:l.demoUrl||'', cloudflareProject:'',
+    domainStatus:'pending', analyticsEnabled:false, robotsSitemapDone:false,
+    lastDeployStatus:'unknown',
+    notes:l.notes, checklist:{}, checkins:{}, feedback:{},
+    createdAt:today(), log:(l.log||[]).slice()
+  };
   c.log.push({date:today(), type:'note', text:'Converted from lead.'});
   state.clients.unshift(c);
   state.leads = state.leads.filter(function(x){ return x.id !== leadId; });
@@ -341,7 +490,7 @@ function checkDuplicates(data){
 /* ===== OUTREACH ===== */
 function fillTemplate(tpl, l){
   var s = state.settings;
-  var demoLine = l.demoUrl ? 'Preview: ' + l.demoUrl : '';
+  var demoLine = l.demoUrl ? 'Preview: ' + normalizeUrl(l.demoUrl) : '';
   var cityClause = l.city ? ' in ' + l.city : '';
   var demoClause = l.demoUrl ? 'has a preview I put together' : 'does not have a modern website';
   return String(tpl)
@@ -349,7 +498,7 @@ function fillTemplate(tpl, l){
     .replace(/\{name\}/g, l.name || 'there')
     .replace(/\{industry\}/g, l.industry || 'businesses')
     .replace(/\{city\}/g, l.city || '')
-    .replace(/\{demo\}/g, l.demoUrl || '')
+    .replace(/\{demo\}/g, normalizeUrl(l.demoUrl) || '')
     .replace(/\{demo_line\}/g, demoLine)
     .replace(/\{demo_clause\}/g, demoClause)
     .replace(/\{city_clause\}/g, cityClause)
@@ -374,14 +523,17 @@ function outreachText(id){
   var l = findById(state.leads, id); if (!l) return;
   if (!l.phone) { toast('No phone','warn'); return; }
   var body = fillTemplate(state.outreach.text.body, l);
-  window.location.href = 'sms:' + String(l.phone).replace(/[^\d+]/g,'') + '?body=' + encodeURIComponent(body);
+  var num = String(l.phone).replace(/[^\d+]/g,'');
+  window.location.href = 'sms:' + num + '?body=' + encodeURIComponent(body);
   logOutreach(id, 'text');
 }
 function outreachWhatsApp(id){
   var l = findById(state.leads, id); if (!l) return;
   if (!l.phone) { toast('No phone','warn'); return; }
   var body = fillTemplate(state.outreach.wa.body, l);
-  window.open('https://wa.me/' + String(l.phone).replace(/[^\d]/g,'') + '?text=' + encodeURIComponent(body), '_blank');
+  var num = waNumber(l.phone);
+  if (!num) { toast('Invalid phone','warn'); return; }
+  window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(body), '_blank', 'noopener');
   logOutreach(id, 'wa');
 }
 function logOutreach(id, channel){
@@ -405,13 +557,29 @@ function renderClients(){
     var done = DEFAULT_CHECKLIST.filter(function(x){ return cl[x]; }).length;
     var total = DEFAULT_CHECKLIST.length;
     var pct = Math.round(done/total*100);
-    return '<tr onclick="openClientForm(\'' + c.id + '\')" style="cursor:pointer"><td><strong>' + esc(c.business||c.name) + '</strong><div style="font-size:10px;color:var(--muted)">' + esc(c.industry||'') + '</div></td><td><span class="pill">' + esc(c.stage||'Content') + '</span></td><td>' + (c.contentReceived ? '<span class="pill ok">Yes</span>' : '<span class="pill warn">Pending</span>') + '</td><td>' + fmt$(c.price) + '</td><td>' + (c.retainer ? '<span class="pill ok">$' + c.retainerAmount + '/mo</span>' : '-') + '</td><td>' + (c.launchDate||'-') + '</td><td><div style="font-size:10px">' + done + '/' + total + ' (' + pct + '%)</div><div style="border:1.5px solid var(--line);height:6px;margin-top:2px"><div style="height:100%;width:' + pct + '%;background:var(--accent)"></div></div></td></tr>';
+    var urls = '';
+    if (c.stagingUrl) urls += urlChip(c.stagingUrl, 'staging', 'small');
+    if (c.liveUrl) urls += urlChip(c.liveUrl, 'live', 'small');
+    if (!c.stagingUrl && !c.liveUrl) urls = '<span class="label" style="font-size:9px">no URLs</span>';
+    return '<tr style="cursor:pointer" onclick="openClientForm(\'' + c.id + '\')">' +
+      '<td onclick="event.stopPropagation()"><button class="btn btn-sm" onclick="openClientActions(event,\'' + c.id + '\')">▾</button></td>' +
+      '<td><strong>' + esc(c.business||c.name) + '</strong><div style="font-size:10px;color:var(--muted)">' + esc(c.industry||'') + '</div></td>' +
+      '<td><span class="pill">' + esc(c.stage||'Content') + '</span></td>' +
+      '<td onclick="event.stopPropagation()">' + urls + '</td>' +
+      '<td>' + fmt$(c.price) + '</td>' +
+      '<td>' + (c.retainer ? '<span class="pill ok">$' + c.retainerAmount + '/mo</span>' : '-') + '</td>' +
+      '<td><div style="font-size:10px">' + done + '/' + total + ' (' + pct + '%)</div><div style="border:1.5px solid var(--line);height:6px;margin-top:2px"><div style="height:100%;width:' + pct + '%;background:var(--accent)"></div></div></td>' +
+    '</tr>';
   }).join('');
-  el.innerHTML = '<table class="tbl"><thead><tr><th>Business</th><th>Stage</th><th>Content</th><th>Value</th><th>Retainer</th><th>Launch</th><th>Checklist</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  el.innerHTML = '<table class="tbl"><thead><tr><th style="width:36px"></th><th>Business</th><th>Stage</th><th>URLs</th><th>Value</th><th>Retainer</th><th>Checklist</th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
 
 function openClientForm(id){
   var c = id ? findById(state.clients, id) : null;
+  var stagingUrl = c && c.stagingUrl ? normalizeUrl(c.stagingUrl) : '';
+  var liveUrl = c && c.liveUrl ? normalizeUrl(c.liveUrl) : '';
+  var cfDashUrl = c && c.cloudflareProject ? ('https://dash.cloudflare.com/?to=/:account/pages/view/' + encodeURIComponent(c.cloudflareProject)) : '';
+
   var html =
     '<div class="field-row"><div class="field"><label>Business name</label><input id="f_business" value="' + esc(c?c.business:'') + '"></div><div class="field"><label>Contact</label><input id="f_name" value="' + esc(c?c.name:'') + '"></div></div>' +
     '<div class="field-row"><div class="field"><label>Phone</label><input id="f_phone" value="' + esc(c?c.phone:'') + '"></div><div class="field"><label>Email</label><input id="f_email" value="' + esc(c?c.email:'') + '"></div></div>' +
@@ -420,8 +588,18 @@ function openClientForm(id){
     '<div class="field-row"><div class="field"><label>Stage</label><select id="f_stage">' + CLIENT_STAGES.map(function(s){ return '<option ' + (c&&c.stage===s?'selected':'') + '>' + s + '</option>'; }).join('') + '</select></div><div class="field"><label>Launch date</label><input type="date" id="f_launchDate" value="' + esc(c?c.launchDate:'') + '"></div></div>' +
     '<div class="field-row"><div class="field"><label>Content received?</label><select id="f_contentReceived"><option value="">No</option><option value="1" ' + (c&&c.contentReceived?'selected':'') + '>Yes</option></select></div><div class="field"><label>On retainer?</label><select id="f_retainer"><option value="">No</option><option value="1" ' + (c&&c.retainer?'selected':'') + '>Yes</option></select></div></div>' +
     '<div class="field-row"><div class="field"><label>Retainer ($/mo)</label><input type="number" id="f_retainerAmount" value="' + ((c&&c.retainerAmount) || state.settings.retainer) + '"></div><div class="field"><label>Billing day (1-28)</label><input type="number" id="f_retainerBillingDay" min="1" max="28" value="' + ((c&&c.retainerBillingDay) || state.settings.retainerBillingDay || 1) + '"></div></div>' +
-    '<div class="field"><label>Live URL</label><input id="f_liveUrl" value="' + esc(c?c.liveUrl:'') + '"></div>' +
+
+    '<div class="panel-head mt"><h2>Cloudflare</h2></div>' +
+    '<div class="field-row"><div class="field"><label>Pages project name</label><input id="f_cloudflareProject" placeholder="joes-plumbing" value="' + esc(c?c.cloudflareProject:'') + '"></div><div class="field"><label>Domain status</label><select id="f_domainStatus">' + DOMAIN_STATUS.map(function(s){ return '<option ' + (c&&c.domainStatus===s?'selected':'') + '>' + s + '</option>'; }).join('') + '</select></div></div>' +
+    '<div class="field"><label>Staging URL</label><input id="f_stagingUrl" placeholder="joes-plumbing-staging.pages.dev" value="' + esc(c?c.stagingUrl:'') + '"></div>' +
+    (stagingUrl ? '<div class="field" style="margin-top:-6px"><div class="row">' + urlChip(stagingUrl,'Staging','small') + '<button class="btn btn-sm" onclick="openDeployForm(\'' + c.id + '\')">⇪ Log deploy</button></div></div>' : '') +
+    '<div class="field"><label>Live URL</label><input id="f_liveUrl" placeholder="joesplumbing.com" value="' + esc(c?c.liveUrl:'') + '"></div>' +
+    (liveUrl ? '<div class="field" style="margin-top:-6px"><div class="row">' + urlChip(liveUrl,'Live','small') + '</div></div>' : '') +
+    (cfDashUrl ? '<div class="field"><div class="row"><button class="btn btn-sm" onclick="openExternal(\'' + jsStr(cfDashUrl) + '\')">☁ Open Cloudflare project</button></div></div>' : '') +
+    '<div class="field-row"><div class="field"><label>Analytics installed?</label><select id="f_analyticsEnabled"><option value="">No</option><option value="1" ' + (c&&c.analyticsEnabled?'selected':'') + '>Yes</option></select></div><div class="field"><label>robots + sitemap done?</label><select id="f_robotsSitemapDone"><option value="">No</option><option value="1" ' + (c&&c.robotsSitemapDone?'selected':'') + '>Yes</option></select></div></div>' +
+
     '<div class="field"><label>Notes</label><textarea id="f_notes">' + esc(c?c.notes:'') + '</textarea></div>';
+
   if (c) {
     var checklist = c.checklist || {};
     html += '<div class="panel-head mt"><h2>Launch checklist</h2></div><div class="checklist">';
@@ -429,6 +607,14 @@ function openClientForm(id){
       html += '<label class="' + (checklist[item]?'done':'') + '"><input type="checkbox" ' + (checklist[item]?'checked':'') + ' onchange="toggleChecklist(\'' + c.id + '\',' + idx + ',this.checked)"><span>' + esc(item) + '</span></label>';
     });
     html += '</div>';
+
+    var deploysFor = (state.deploys||[]).filter(function(d){ return d.clientId === c.id; }).slice(0,10);
+    html += '<div class="panel-head mt"><h2>Deploy log</h2><button class="btn btn-sm" onclick="openDeployForm(\'' + c.id + '\')">+ Log deploy</button></div>';
+    if (deploysFor.length === 0) html += '<div class="empty">No deploys logged yet.</div>';
+    else html += '<div class="timeline">' + deploysFor.map(function(d){
+      return '<div class="ev"><div class="d">' + esc(d.date) + ' - ' + esc(d.target) + ' - ' + esc(d.status) + '</div>' + esc(d.note||'(no note)') + '</div>';
+    }).join('') + '</div>';
+
     html += '<div class="row mt" style="flex-wrap:wrap"><button class="btn btn-sm" onclick="generateInvoice(\'' + c.id + '\',\'Deposit\')">+ Deposit invoice</button><button class="btn btn-sm" onclick="generateInvoice(\'' + c.id + '\',\'Final\')">+ Final invoice</button><button class="btn btn-sm" onclick="openTimeForm(\'' + c.id + '\')">+ Log time</button><button class="btn btn-sm" onclick="invoiceFromTime(\'' + c.id + '\')">Invoice from time</button></div>';
   }
   var foot = '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>';
@@ -445,9 +631,29 @@ function toggleChecklist(clientId, index, checked){
 }
 
 function saveClient(id){
-  var data = {business:val('f_business'), name:val('f_name'), phone:val('f_phone'), email:val('f_email'), industry:val('f_industry'), city:val('f_city'), package:val('f_package'), price:Number(val('f_price'))||0, stage:val('f_stage'), launchDate:val('f_launchDate'), contentReceived:!!val('f_contentReceived'), retainer:!!val('f_retainer'), retainerAmount:Number(val('f_retainerAmount'))||0, retainerBillingDay:Number(val('f_retainerBillingDay'))||1, liveUrl:val('f_liveUrl'), notes:val('f_notes')};
-  if (id) { var c = findById(state.clients, id); if (c) for (var k in data) if (data.hasOwnProperty(k)) c[k] = data[k]; }
-  else { var n = {id:uid(), createdAt:today(), log:[], checklist:{}, checkins:{}, feedback:{}}; for (var k2 in data) if (data.hasOwnProperty(k2)) n[k2] = data[k2]; state.clients.unshift(n); }
+  var data = {
+    business:val('f_business'), name:val('f_name'), phone:val('f_phone'), email:val('f_email'),
+    industry:val('f_industry'), city:val('f_city'), package:val('f_package'),
+    price:Number(val('f_price'))||0, stage:val('f_stage'), launchDate:val('f_launchDate'),
+    contentReceived:!!val('f_contentReceived'), retainer:!!val('f_retainer'),
+    retainerAmount:Number(val('f_retainerAmount'))||0,
+    retainerBillingDay:Number(val('f_retainerBillingDay'))||1,
+    cloudflareProject:val('f_cloudflareProject'),
+    domainStatus:val('f_domainStatus') || 'pending',
+    stagingUrl:val('f_stagingUrl'),
+    liveUrl:val('f_liveUrl'),
+    analyticsEnabled:!!val('f_analyticsEnabled'),
+    robotsSitemapDone:!!val('f_robotsSitemapDone'),
+    notes:val('f_notes')
+  };
+  if (id) {
+    var c = findById(state.clients, id);
+    if (c) for (var k in data) if (data.hasOwnProperty(k)) c[k] = data[k];
+  } else {
+    var n = {id:uid(), createdAt:today(), log:[], checklist:{}, checkins:{}, feedback:{}, lastDeployStatus:'unknown'};
+    for (var k2 in data) if (data.hasOwnProperty(k2)) n[k2] = data[k2];
+    state.clients.unshift(n);
+  }
   saveState(); closeModal(); renderAll(); toast('Client saved','ok');
 }
 
@@ -511,19 +717,20 @@ function renderDemos(){
   var rows = state.demos.map(function(d){
     var age = d.createdAt ? daysBetween(d.createdAt, now) : 0;
     var stale = age > 60;
-    return '<tr><td>' + esc(d.business) + '</td><td><a href="' + esc(d.url) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">' + esc(d.url) + '</a></td><td>' + esc(d.createdAt||'') + ' (' + age + 'd)</td><td>' + (stale ? '<span class="pill danger">Cleanup</span>' : '<span class="pill ok">Active</span>') + '</td><td class="acts"><button class="btn btn-sm" onclick="deleteDemo(\'' + d.id + '\')">Delete</button></td></tr>';
+    var u = normalizeUrl(d.url);
+    return '<tr><td>' + esc(d.business) + '</td><td>' + urlChip(u,'Open demo') + '</td><td>' + esc(d.createdAt||'') + ' (' + age + 'd)</td><td>' + (stale ? '<span class="pill danger">Cleanup</span>' : '<span class="pill ok">Active</span>') + '</td><td class="acts"><button class="btn btn-sm" onclick="deleteDemo(\'' + d.id + '\')">Delete</button></td></tr>';
   }).join('');
   el.innerHTML = '<table class="tbl"><thead><tr><th>Business</th><th>URL</th><th>Deployed</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
 
 function openDemoForm(){
-  openModal('New Demo', '<div class="field"><label>Business name</label><input id="f_business"></div><div class="field"><label>Demo URL</label><input id="f_url" placeholder="https://demo.pages.dev"></div>', '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveDemo()">Save</button>');
+  openModal('New Demo', '<div class="field"><label>Business name</label><input id="f_business"></div><div class="field"><label>Demo URL</label><input id="f_url" placeholder="demo-roofing.pages.dev"></div>', '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveDemo()">Save</button>');
 }
 
 function saveDemo(){
   var business = val('f_business'); var url = val('f_url');
   if (!business || !url) { toast('Fill both fields','warn'); return; }
-  state.demos.unshift({id:uid(), business:business, url:url, createdAt:today()});
+  state.demos.unshift({id:uid(), business:business, url:normalizeUrl(url), createdAt:today()});
   saveState(); closeModal(); renderAll(); toast('Demo added','ok');
 }
 
@@ -607,12 +814,7 @@ function editScriptTitle(id, text){ var s = findById(state.scripts, id); if (!s)
 function editScriptBody(id, text){ var s = findById(state.scripts, id); if (!s) return; s.body = text; saveState(); toast('Saved','ok'); }
 function copyScript(id, btn){
   var s = findById(state.scripts, id); if (!s) return;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(s.body).then(function(){
-      var orig = btn.textContent; btn.textContent = 'Copied';
-      setTimeout(function(){ btn.textContent = orig; }, 1500);
-    }).catch(function(){ toast('Copy failed','warn'); });
-  } else toast('Clipboard unavailable','warn');
+  copyText(s.body, 'Script');
 }
 function addScript(){ state.scripts.push({id:uid(), category:'general', title:'New script', body:'Write here', deleted:false}); saveState(); renderScripts(); toast('Script added','ok'); }
 function deleteScript(id){ var s = findById(state.scripts, id); if (!s) return; s.deleted = true; s.deletedAt = today(); saveState(); renderScripts(); toast('Moved to deleted - toggle "Show deleted"','warn'); }
@@ -673,10 +875,11 @@ function resetAllData(){
 function exportCSV(kind){
   var headers = [], rows = [];
   if (kind === 'leads') { headers = ['business','contact','phone','email','industry','city','source','stage','value','demoUrl','notes','createdAt']; rows = state.leads.map(function(l){ return [l.business,l.name,l.phone,l.email,l.industry,l.city,l.source,l.stage,l.value,l.demoUrl,l.notes,l.createdAt]; }); }
-  else if (kind === 'clients') { headers = ['business','contact','phone','email','industry','city','package','price','stage','launchDate','contentReceived','retainer','retainerAmount','liveUrl','notes','createdAt']; rows = state.clients.map(function(c){ return [c.business,c.name,c.phone,c.email,c.industry,c.city,c.package,c.price,c.stage,c.launchDate,c.contentReceived,c.retainer,c.retainerAmount,c.liveUrl,c.notes,c.createdAt]; }); }
+  else if (kind === 'clients') { headers = ['business','contact','phone','email','industry','city','package','price','stage','launchDate','contentReceived','retainer','retainerAmount','stagingUrl','liveUrl','cloudflareProject','domainStatus','notes','createdAt']; rows = state.clients.map(function(c){ return [c.business,c.name,c.phone,c.email,c.industry,c.city,c.package,c.price,c.stage,c.launchDate,c.contentReceived,c.retainer,c.retainerAmount,c.stagingUrl,c.liveUrl,c.cloudflareProject,c.domainStatus,c.notes,c.createdAt]; }); }
   else if (kind === 'invoices') { headers = ['clientName','type','amount','status','date','payoneerRef','notes']; rows = state.invoices.map(function(i){ return [i.clientName,i.type,i.amount,i.status,i.date,i.payoneerRef,i.notes]; }); }
   else if (kind === 'time') { headers = ['date','client','hours','note','invoiced']; rows = state.timeEntries.map(function(t){ var c = t.clientId ? findById(state.clients, t.clientId) : null; return [t.date, c?(c.business||c.name):'', ((t.minutes||0)/60).toFixed(2), t.note, t.invoiced]; }); }
   else if (kind === 'lost') { headers = ['date','business','amount','reason','notes']; rows = state.lostDeals.map(function(l){ return [l.date,l.business,l.amount,l.reason,l.notes]; }); }
+  else if (kind === 'deploys') { headers = ['date','client','target','status','note']; rows = (state.deploys||[]).map(function(d){ return [d.date,d.clientName,d.target,d.status,d.note]; }); }
   else return;
   function cc(v){ if (v == null) return ''; var s = String(v).replace(/"/g,'""'); if (s.indexOf(',') !== -1 || s.indexOf('"') !== -1 || s.indexOf('\n') !== -1) return '"' + s + '"'; return s; }
   var csv = headers.join(',') + '\r\n' + rows.map(function(r){ return r.map(cc).join(','); }).join('\r\n');
@@ -688,7 +891,7 @@ function exportCSV(kind){
   toast(kind + '.csv exported','ok');
 }
 
-/* ===== SEARCH ===== */
+/* ===== SEARCH (basic — commands.js overrides) ===== */
 function doSearch(q){
   var res = $('searchResults'); if (!res) return;
   q = (q||'').trim().toLowerCase();
@@ -711,6 +914,7 @@ function quickAddMenu(){
     '<button class="btn" style="width:100%;justify-content:center" onclick="closeModal();openInvoiceForm()">+ New Invoice</button>' +
     '<button class="btn" style="width:100%;justify-content:center" onclick="closeModal();openDemoForm()">+ New Demo</button>' +
     '<button class="btn" style="width:100%;justify-content:center" onclick="closeModal();openTimeForm()">+ Log Time</button>' +
+    '<button class="btn" style="width:100%;justify-content:center" onclick="closeModal();openDeployForm()">+ Log Deploy</button>' +
     '</div>';
   openModal('Quick Add', html, '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>');
 }
@@ -728,6 +932,7 @@ function renderAll(){
   fns.forEach(function(fn){ try { fn(); } catch(e){ if (window.console) console.error('[Studio OS]', fn.name, e); } });
   if (typeof window.renderProposals === 'function') { try { window.renderProposals(); } catch(e){} }
   if (typeof window.renderToday === 'function') { try { window.renderToday(); } catch(e){} }
+  if (typeof window.renderDeployments === 'function') { try { window.renderDeployments(); } catch(e){} }
   if (typeof window.updateBadges === 'function') { try { window.updateBadges(); } catch(e){} }
 }
 
@@ -753,16 +958,23 @@ window.purgeScript = purgeScript; window.copyScript = copyScript;
 window.editScriptTitle = editScriptTitle; window.editScriptBody = editScriptBody;
 window.saveSetting = saveSetting; window.toast = toast;
 window.renderScripts = renderScripts; window.renderAll = renderAll;
-window.uid = uid; window.today = today; window.fmt$ = fmt$; window.esc = esc;
+window.uid = uid; window.today = today; window.fmt$ = fmt$; window.esc = esc; window.jsStr = jsStr;
 window.daysBetween = daysBetween; window.addDays = addDays; window.findById = findById;
 window.saveState = saveState; window.defaultState = defaultState; window.mergeDeep = mergeDeep;
+window.normalizeUrl = normalizeUrl; window.openExternal = openExternal; window.copyText = copyText;
+window.urlChip = urlChip; window.handleUrlClick = handleUrlClick; window.handleCopyClick = handleCopyClick;
+window.openClientActions = openClientActions; window.closeClientActions = closeClientActions;
+window.addDeploy = addDeploy; window.openDeployForm = openDeployForm; window.saveDeploy = saveDeploy;
 
 /* ===== KEYBOARD ===== */
 document.addEventListener('keydown', function(e){
   if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA' && !document.activeElement.isContentEditable) {
     e.preventDefault(); var inp = $('searchInput'); if (inp) inp.focus();
   }
-  if (e.key === 'Escape') { closeModal(); var res = $('searchResults'); if (res) res.classList.remove('open'); }
+  if ((e.key === 'k' || e.key === 'K') && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault(); var inp2 = $('searchInput'); if (inp2) { inp2.focus(); inp2.select(); }
+  }
+  if (e.key === 'Escape') { closeModal(); closeClientActions(); var res = $('searchResults'); if (res) res.classList.remove('open'); }
 });
 document.addEventListener('click', function(e){
   if (!e.target.closest('.search')) { var res = $('searchResults'); if (res) res.classList.remove('open'); }
@@ -778,8 +990,8 @@ function initStudioOS(){
   tickClock(); setInterval(tickClock, 30000);
   if (typeof window.initSync === 'function') { try { window.initSync(); } catch(e){} }
   if (state.leads.length === 0 && state.clients.length === 0) {
-    setTimeout(function(){ toast('Welcome. Add a lead or read the Playbook.','ok'); }, 800);
+    setTimeout(function(){ toast('Welcome. Click ? Help in the sidebar for a tour.','ok'); }, 800);
   }
-  if (window.console) console.log('[Studio OS] Ready. Leads:', state.leads.length, 'Sync:', syncEnabled);
+  if (window.console) console.log('[Studio OS] Ready. Leads:', state.leads.length, 'Clients:', state.clients.length);
 }
 window.initStudioOS = initStudioOS;
